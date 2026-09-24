@@ -1,9 +1,10 @@
 /* ============================================================
    online.js — oyuncu adı, puan, liderlik tablosu
 
-   Sadece oyun http(s) üzerinden (server.mjs / Cloudflare tüneli)
-   açıldığında çalışır; file:// ile açılınca tablo gizlenir, oyun
-   yine oynanır.
+   Skorlar Supabase'te tutulur (supabase/leaderboard.sql). Tarayıcı
+   sadece iki veritabanı fonksiyonunu çağırır; puanı sunucu kendisi
+   hesaplar. Anahtar 'publishable' türündedir: herkese açık olabilir.
+   Hem GitHub Pages linkinde hem de dosyadan açınca çalışır.
 
    PUAN = av × 10  +  toplam hasar / 50  +  tamamlanan aşama × 10.000
           (Dehşet'te ×1.5). Oyuncu kimliği başına en iyi puan saklanır.
@@ -15,23 +16,30 @@ EV.Online = (function () {
 
   const U = EV.U;
   const $ = (id) => document.getElementById(id);
-  const enabled = /^https?:$/.test(location.protocol);
+  const SB_URL = 'https://xrexhojwiogllccjbjne.supabase.co';
+  const SB_KEY = 'sb_publishable_kWJdqAI7K9dq8IEf1fuscQ_Mpc9Nd';
+  const enabled = typeof fetch === 'function';
   let lastSent = 0;
   let open = false;
 
-  /* API adresi: aynı sunucudan açıldıysa göreli; GitHub Pages'ten açıldıysa
-     skor sunucusunun (Cloudflare tüneli) adresi api.json'dan okunur. */
-  let apiBase = '';
-  const ready = (async () => {
-    if (!enabled || !/github\.io$/.test(location.hostname)) return;
-    try {
-      const r = await fetch('api.json', { cache: 'no-store' });
-      const d = await r.json();
-      if (d && typeof d.base === 'string' && /^https:\/\/[\w.-]+\/$/.test(d.base)) apiBase = d.base;
-    } catch (e) { /* skor sunucusu kapalı: oyun yine oynanır */ }
-  })();
-  // Content-Type text/plain: tarayıcı ön-uçuş (CORS preflight) isteği atmaz
-  const post = (body) => fetch(apiBase + 'api/score', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body, keepalive: true });
+  /** Supabase veritabanı fonksiyonu çağırır; JSON cevabı döner. */
+  async function rpc(fn, args, keepalive) {
+    const r = await fetch(SB_URL + '/rest/v1/rpc/' + fn, {
+      method: 'POST', keepalive: !!keepalive,
+      headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!r.ok) throw new Error('Skor sunucusu: ' + r.status);
+    return r.json();
+  }
+
+  function payload(game) {
+    const s = game.stats;
+    return {
+      p_id: id, p_name: name(), p_stage: game.stageIndex, p_gen: game.generation, p_kills: game.kills,
+      p_total_dmg: Math.floor(s.totalDmg), p_max_hit: Math.floor(s.maxHit), p_diff: game.diff.id,
+    };
+  }
 
   function store(k, v) {
     try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { /* gizli sekme */ }
@@ -68,16 +76,11 @@ EV.Online = (function () {
     const now = Date.now();
     if (!force && now - lastSent < 30000) return;
     lastSent = now;
-    const s = game.stats;
-    const body = JSON.stringify({
-      id, name: name(), score: score(game), stage: game.stageIndex, gen: game.generation,
-      kills: game.kills, totalDmg: Math.floor(s.totalDmg), maxHit: Math.floor(s.maxHit), diff: game.diff.id,
-    });
-    ready.then(() => post(body))
-      .then((r) => {
+    rpc('submit_score', payload(game), true)
+      .then((d) => {
         // hız sınırına takıldıysa (ör. ölüm, periyodik gönderimin hemen ardından) bir kez yeniden dene;
         // yoksa en güncel puan kaybolup tablo eski bir değerde kalıyordu
-        if (r.status === 429 && !isRetry) {
+        if (d && d.error === 'yavaş' && !isRetry) {
           clearTimeout(retryTimer);
           retryTimer = setTimeout(() => submit(game, true, true), 3000);
         }
@@ -87,12 +90,9 @@ EV.Online = (function () {
 
   /** Sekme kapanırken son durumu gönder. */
   function beacon(game) {
-    if (!enabled || !game.started || name().length < 2 || !navigator.sendBeacon) return;
-    const s = game.stats;
-    navigator.sendBeacon(apiBase + 'api/score', new Blob([JSON.stringify({
-      id, name: name(), score: score(game), stage: game.stageIndex, gen: game.generation,
-      kills: game.kills, totalDmg: Math.floor(s.totalDmg), maxHit: Math.floor(s.maxHit), diff: game.diff.id,
-    })], { type: 'text/plain' }));
+    // sendBeacon başlık (apikey) gönderemez; keepalive fetch sekme kapanınca da tamamlanır
+    if (!enabled || !game.started || name().length < 2) return;
+    rpc('submit_score', payload(game), true).catch(() => { /* çevrimdışı */ });
   }
 
   const STAGE = ['Hücre', 'Sürüngen', 'Memeli'];
@@ -119,14 +119,8 @@ EV.Online = (function () {
     const body = $('lbRows');
     body.innerHTML = '<tr><td colspan="7">Yükleniyor…</td></tr>';
     if (game && game.started) submit(game, true);
-    if (!enabled) {
-      body.innerHTML = '<tr><td colspan="7">Liderlik tablosu çevrim içi linkte çalışır (dosyadan açınca kapalı).</td></tr>';
-      return;
-    }
     try {
-      await ready;
-      const r = await fetch(apiBase + 'api/leaderboard?id=' + id, { cache: 'no-store' });
-      const d = await r.json();
+      const d = await rpc('get_leaderboard', { p_id: id });
       body.innerHTML = '';
       (d.entries || []).forEach((e, i) => body.appendChild(row(e, i)));
       if (!d.entries || !d.entries.length) body.innerHTML = '<tr><td colspan="7">Henüz kimse yok — ilk sen ol!</td></tr>';
