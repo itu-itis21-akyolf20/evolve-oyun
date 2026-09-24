@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a120a">
+<title>EVOLVE Mobil</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="mobile/mobile.css">
+</head>
+<!--
+  Mobil giriş: masaüstü oyunun (index.html + js/) HİÇBİR dosyası değişmez.
+  mobile/boot.js index.html'i okuyup aynı arayüzü ve scriptleri yükler,
+  üstüne dokunmatik kontrolleri ekler. Oyun güncellenince mobil de güncellenir.
+-->
+<body class="prestart mobile">
+<div id="mBoot">EVOLVE yükleniyor…</div>
+<script src="mobile/boot.js"></script>
+</body>
+</html>

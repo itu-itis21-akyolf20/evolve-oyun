@@ -35,6 +35,10 @@ window.T = (function () {
     return Math.floor(Math.random() * n);
   }
 
+  function digit(i) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit' + (i + 1), key: String(i + 1) }));
+  }
+
   /** Açık modal varsa geçer; bir şey yaptıysa true. */
   function handleModals(o) {
     o = o || {};
@@ -43,7 +47,7 @@ window.T = (function () {
       if (cards.length) {
         const i = pickIndex(o.pick, cards.length);
         stats.cards.push(cards[i].querySelector('.cname') ? cards[i].querySelector('.cname').textContent : '?');
-        cards[i].click();
+        digit(i);                     // fare tıklaması açılışta 0.8 sn kilitli; klavye (1-2-3) değil
       }
       return true;
     }
@@ -52,7 +56,7 @@ window.T = (function () {
       if (genes.length) {
         const i = pickIndex(o.pickGene || o.pick, genes.length);
         stats.genes.push(genes[i].querySelector('.gn').textContent);
-        genes[i].click();
+        digit(i);
       }
       stats.stages.push({ at: Math.round(G().time), stage: G().stageIndex, gen: G().generation, level: G().build.level });
       return true;
