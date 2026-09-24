@@ -161,6 +161,17 @@
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) resetAll(); });
 
+  /* Çantanın masaüstünde düğmesi yok (Tab/Esc ile kapanır): mobilde Kapat düğmesi ekle */
+  (function addInvClose() {
+    const panel = document.querySelector('#invPanel .panel');
+    if (!panel || panel.querySelector('.mInvClose')) return;
+    const b = document.createElement('button');
+    b.className = 'mInvClose';
+    b.textContent = 'Kapat ✕';
+    b.onclick = () => { EV.Inv.close(); EV.Game.resume(); };
+    panel.appendChild(b);
+  })();
+
   /* ---------------- düğme durumları (ikon, bekleme, öfke) ---------------- */
   const skillEls = SKILL_BTNS.map((s) => {
     const el = root.querySelector('.m-' + s.a);

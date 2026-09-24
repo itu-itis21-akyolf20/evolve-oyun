@@ -377,7 +377,7 @@ EV.Player = (function () {
       case 'cone': return (p.range || 4) + 1;
       case 'nova': return (p.r || 5) * 0.9;
       case 'zone': return p.castRange || 18;
-      case 'trap': return (p.r || 3) + 2;
+      case 'trap': return (p.r || 3) + 4;          // kurulurken yaklaşan da yakalansın
       case 'orbit': return (p.r || 3) + 2;
       case 'buff': return 10;
       case 'summon': return 16;
@@ -393,6 +393,9 @@ EV.Player = (function () {
     return EV.Enemies.nearest(pos.x, pos.z, 22, (e) => !e.ally && !e.peaceful);
   }
 
+  // kendi çevresine atılanlar hedefe değil EN YAKIN canlıya bakar (mayın, dönüş, yörünge…)
+  const AUTO_SELF = { trap: 1, nova: 1, orbit: 1, buff: 1, summon: 1 };
+
   function autoCast(game, dt) {
     const P = game.player;
     P.autoT -= dt;
@@ -401,12 +404,14 @@ EV.Player = (function () {
     if (!t) return;
     const pos = P.group.position;
     const d = EV.Creature.surfDist(t.group, pos.x, pos.z);
+    const near = EV.Enemies.nearest(pos.x, pos.z, 12, (e) => !e.ally && !e.peaceful);
+    const dNear = near ? EV.Creature.surfDist(near.group, pos.x, pos.z) : Infinity;
     for (let slot = 0; slot < 3; slot++) {
       const sd = slotDef(game, slot);
       if (!sd || AUTO_SKIP[sd.def.kind] || sd.s.cd > 0) continue;
       const p = DATA.params(sd.def, sd.s.rank);
       if (P.energy - p.cost < AUTO_RESERVE) continue;
-      if (d > autoRange(sd.def, p)) continue;
+      if ((AUTO_SELF[sd.def.kind] ? Math.min(d, dNear) : d) > autoRange(sd.def, p)) continue;
       // nişanı geçici olarak hedefe çevir (yer hedefliler hedefin altına düşer)
       const saveAim = _aimSave.copy(P.aimPoint), saveHover = P.hover;
       const tp = t.group.position;

@@ -1,0 +1,37 @@
+// Mobil: 🔁 ile oto yetenek açılır, mayın yakındaki canlıya göre atılır (seçili hedef uzakta olsa da); çanta Kapat düğmesi
+const wait = async (fn, ms) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) return false; await new Promise((r) => setTimeout(r, 50)); } return true; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+await wait(() => window.EV && EV.Game && EV.MobileAssist && document.getElementById('mTouch'), 15000);
+T.start('normal');
+const G = EV.Game, P = G.player, b = G.build, root = document.getElementById('mTouch');
+let tid = 200;
+const tap = (sel) => { const el = root.querySelector(sel); const t = new Touch({ identifier: ++tid, target: el, clientX: 0, clientY: 0 });
+  el.dispatchEvent(new TouchEvent('touchstart', { changedTouches: [t], touches: [t], bubbles: true, cancelable: true }));
+  el.dispatchEvent(new TouchEvent('touchend', { changedTouches: [t], touches: [], bubbles: true, cancelable: true })); };
+const r = {};
+b.skills = [{ id: 'c_mine', rank: 1, cd: 0 }];
+b.uses = {};
+EV.Build.recompute(G);
+P.energy = P.stats.maxEnergy;
+G.enemies.slice().forEach((e) => { if (!e.ally && e.alive) EV.Enemies.despawn(G, G.enemies.indexOf(e)); });
+const pp = P.group.position, def = EV.MOBS.ENEMIES[0][1];
+const mk = (dx) => { const e = EV.Enemies.make(G, def, { pos: { x: pp.x + dx, z: pp.z }, hp: 1e6, dmg: 0 }); e.behavior = 'passive'; e.speed = 0; return e; };
+const far = mk(15), close = mk(-4);
+P.lockTarget = far;
+tap('.mAuto');
+await sleep(400);
+r.autoOn = P.autoCast === true && root.querySelector('.mAuto').classList.contains('active');
+await sleep(1500);
+r.mineUsed = (b.uses.c_mine || 0) > 0;
+tap('.mAuto');
+await sleep(200);
+// çanta
+tap('[data-a="bag"]');
+await sleep(200);
+r.bagOpen = EV.Inv.isOpen();
+const btn = document.querySelector('#invPanel .mInvClose');
+r.closeBtn = !!btn && btn.offsetParent !== null;
+btn && btn.click();
+await sleep(200);
+r.bagClosedResumed = !EV.Inv.isOpen() && !G.paused;
+return r;
