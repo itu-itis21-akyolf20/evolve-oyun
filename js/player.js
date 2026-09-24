@@ -4,7 +4,7 @@
    Kontroller
      WASD hareket (kameraya göre) · Fare bak · Tekerlek yakınlaş
      Sol tık  temel saldırı (3'lü kombo, basılı tutulabilir)
-     Sağ tık  basılı: nişan modu (nişangaha dönük yürü)
+     Sağ tık  basılı: nişan modu (nişangaha dönük yürü); bu sırada sol tık = uzaktan atış
      Q E F    yetenekler · R ultimate (öfke dolunca)
               yer hedefli olanlar: basılı tut → göstergeyle nişan al → bırak
      Boşluk   atılım (enerji) · Tab hedef kilitle/değiştir · X kilidi bırak
@@ -221,7 +221,27 @@ EV.Player = (function () {
   /* =========================================================
      Temel saldırı (3'lü kombo, hedefe mıknatıslanır)
      ========================================================= */
-  function basic(game) {
+  /* Menzilli temel saldırı (sağ tık basılıyken sol tık): yakın dövüşün
+     ~%40'ı kadar saniyelik hasar, karşılığında güvenli mesafe. */
+  const SHOT = { mult: 0.6, cd: 0.65 };
+  function rangedBasic(game) {
+    const P = game.player;
+    const S = P.stats;
+    const t = P.lockTarget && P.lockTarget.alive && !P.lockTarget.ally ? P.lockTarget : null;
+    const pos = P.group.position;
+    const tp = t ? t.group.position : P.aimPoint;
+    P.aimYaw = Math.atan2(tp.x - pos.x, tp.z - pos.z);
+    P.group.rotation.y = P.aimYaw;
+    EV.Creature.attack(P.group, 0.15);
+    EV.Skills.basicShot(game, t, S.dmg * SHOT.mult);
+    P.basicCd = SHOT.cd / S.atkSpd;
+    P.faceT = Math.max(0.3, P.basicCd + 0.1);
+    P.combo = 0;
+    P.lastCombatT = game.time;
+  }
+
+  function basic(game, ranged) {
+    if (ranged) return rangedBasic(game);
     const P = game.player;
     const S = P.stats;
     const st = game.stage();
@@ -443,7 +463,7 @@ EV.Player = (function () {
     /* --- girdiler --- */
     const canAct = !inMotion && !busy && !EV.Status.stunned(P);
     if (canAct) {
-      if (I.mouse.left && P.basicCd <= 0 && !P.aiming) basic(game);
+      if (I.mouse.left && P.basicCd <= 0 && !P.aiming) basic(game, aimMode);
       if (I.hit('Space')) dash(game, wish);
 
       const slots = [0, 1, 2, 'R'];

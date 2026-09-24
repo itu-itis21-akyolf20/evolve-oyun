@@ -86,7 +86,7 @@ EV.Skills = (function () {
     const from = pr.pull ? P(game).group.position : pr.mesh.position;
     let knock = pr.knock || 0;
     if (pr.pull) knock = Math.min(30, e.group.position.distanceTo(from) * 3.2);
-    EV.Combat.hitEnemy(game, e, pr.dmg, { source: pr.src, st: pr.st, pow: pr.pow, knock, from, pull: !!pr.pull });
+    EV.Combat.hitEnemy(game, e, pr.dmg, { source: pr.src, st: pr.st, pow: pr.pow, knock, from, pull: !!pr.pull, basic: !!pr.basic });
     if (pr.chainOnHit) chainFrom(game, e, pr.chainOnHit, pr.dmg * 0.6, pr.st, pr.src, pr.pow, 9);
   }
 
@@ -147,6 +147,25 @@ EV.Skills = (function () {
         projs.splice(i, 1);
       }
     }
+  }
+
+  /** Nişan modunda (sağ tık basılı) sol tık: kilitli hedefe ya da nişangaha tek mermi. */
+  const SHOT_COLOR = [0x9de89d, 0xffc06a, 0xf0e2c8];
+  function basicShot(game, target, dmg) {
+    const pl = P(game);
+    const o = chest(game, 1.0);
+    const aimAt = target ? target.group.position.clone().setY(target.group.position.y + target.group.userData.hipY) : pl.aimPoint;
+    const dir = new THREE.Vector3().subVectors(aimAt, o);
+    const flatLen = Math.hypot(dir.x, dir.z);
+    if (flatLen < 0.3) dir.set(Math.sin(pl.aimYaw), 0, Math.cos(pl.aimYaw));
+    else dir.y = U.clamp(dir.y / flatLen, -0.35, 0.25) * flatLen;
+    dir.normalize();
+    spawnProj(game, {
+      pos: o, dir, speed: 38, range: 26, size: 0.3, dmg, st: [], pow: pl.stats.dmg * pl.stats.statusPower,
+      pierce: 0, explode: 0, tick: 0, knock: 1.5, chainOnHit: 0, color: SHOT_COLOR[game.stageIndex] || 0xffffff,
+      src: 'player', basic: true,
+    });
+    U.audio.shoot();
   }
 
   /* =========================================================
@@ -613,7 +632,7 @@ EV.Skills = (function () {
   }
 
   return {
-    init, cast, update, updateMotion, clear, spawnZone, tagColor,
+    init, cast, update, updateMotion, clear, spawnZone, tagColor, basicShot,
     get counts() { return { projs: projs.length, zones: zones.length, orbits: orbits.length, traps: traps.length }; },
   };
 })();
