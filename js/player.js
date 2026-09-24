@@ -104,7 +104,7 @@ EV.Player = (function () {
       hp: 100, energy: 100, rage: 0, shield: 0, shieldT: 0,
       alive: true, iframe: 0, radius: 1, sizeScale: 1,
       speed01: 0, t: 0, moving: false,
-      yaw: 0, pitch: 0.4, zoom: 1, aimYaw: 0, faceT: 0,
+      yaw: 0, pitch: 0.4, zoom: 1, aimYaw: 0, faceT: 0, fps: loadFps(),
       aimPoint: new THREE.Vector3(), hover: null, lockTarget: null,
       stats: null, buffs: [], buffOnHit: [],
       dash: null, leap: null, leapY: 0, hunt: null,
@@ -138,7 +138,7 @@ EV.Player = (function () {
     P.bodySpec = spec;
     P.sizeScale = spec.scale;
     P.radius = P.group.userData.radius;
-    if (stage.cam && stage.cam.pitch != null) P.pitch = stage.cam.pitch;
+    if (stage.cam && stage.cam.pitch != null) P.pitch = P.fps ? FPS_PITCH : stage.cam.pitch;
     P.pivot.copy(pos);
     game.scene.add(P.group);
   }
@@ -378,7 +378,8 @@ EV.Player = (function () {
     /* --- bakış ve yakınlaşma --- */
     if (I.mouse.locked) {
       P.yaw -= I.mouse.dx * 0.0022;
-      P.pitch = U.clamp(P.pitch + I.mouse.dy * 0.0016, -0.35, 1.15);
+      P.pitch = P.fps ? U.clamp(P.pitch + I.mouse.dy * 0.0016, -1.1, 1.2)
+        : U.clamp(P.pitch + I.mouse.dy * 0.0016, -0.35, 1.15);
     }
     if (I.mouse.wheel) P.zoom = U.clamp(P.zoom + I.mouse.wheel * 0.08, 0.6, 1.6);
 
@@ -460,11 +461,14 @@ EV.Player = (function () {
     const aimYawNow = Math.atan2(P.aimPoint.x - P.group.position.x, P.aimPoint.z - P.group.position.z);
     let face = null;
     if (P.faceT > 0) face = P.aimYaw;
+    else if (P.fps) face = P.yaw;
     else if (aimMode || P.aiming) face = aimYawNow;
     else if (P.lockTarget && !P.moving) face = aimYawNow;
     else if (P.moving && !inMotion) face = Math.atan2(P.vel.x, P.vel.z);
     if (face != null) P.group.rotation.y = U.wrapAngle(U.approachAngle(P.group.rotation.y, face, dt * 14));
     if (P.faceT <= 0) P.aimYaw = aimYawNow;
+
+    if (I.hit('KeyV')) toggleFps(game);
 
     /* --- girdiler --- */
     const canAct = !inMotion && !busy && !EV.Status.stunned(P);
@@ -533,8 +537,43 @@ EV.Player = (function () {
      ========================================================= */
   const _fwd = new THREE.Vector3();
   const _cam = new THREE.Vector3();
+  /* ---------------- birinci şahıs (FPS) kamera: V ile aç/kapat ---------------- */
+  const FPS_KEY = 'evolve_fps';
+  const FPS_PITCH = 0.08;
+  function loadFps() { try { return localStorage.getItem(FPS_KEY) === '1'; } catch (e) { return false; } }
+
+  function toggleFps(game) {
+    const P = game.player;
+    P.fps = !P.fps;
+    try { localStorage.setItem(FPS_KEY, P.fps ? '1' : '0'); } catch (e) { /* gizli sekme */ }
+    const c = game.stage().cam;
+    P.pitch = P.fps ? FPS_PITCH : (c && c.pitch != null ? c.pitch : 0.4);
+    P.group.visible = !P.fps;
+    game.toast(P.fps ? '👁️ Birinci şahıs kamera <span class="sub">(V ile geri dön)</span>' : '🎥 Üçüncü şahıs kamera', '#cfe8ff', 1400);
+  }
+
+  /** Göz: gövdenin önü, boyunun ~%80'i. Kendi gövden gizlenir (kameranın içine girmesin). */
+  function fpsCamera(game, camera) {
+    const P = game.player;
+    const pp = P.group.position;
+    const cap = P.group.userData.cap;
+    const fwdOff = (cap.cz + cap.hl + cap.r * 0.4);
+    P.group.visible = false;
+    _cam.set(pp.x + Math.sin(P.yaw) * fwdOff, pp.y + P.group.userData.height * 0.8, pp.z + Math.cos(P.yaw) * fwdOff);
+    const minY = W.height(_cam.x, _cam.z) + 0.35;
+    if (_cam.y < minY) _cam.y = minY;
+    P.pivot.copy(_cam);
+    const cp = Math.cos(P.pitch), sp = Math.sin(P.pitch);
+    _fwd.set(Math.sin(P.yaw) * cp, -sp, Math.cos(P.yaw) * cp);
+    camera.position.copy(_cam);
+    camera.lookAt(_w.copy(_cam).add(_fwd));
+    camera.updateMatrixWorld();
+  }
+
   function updateCamera(game, camera, dt) {
     const P = game.player;
+    if (P.fps && P.alive) return fpsCamera(game, camera);
+    if (!P.group.visible) P.group.visible = true;
     const stage = game.stage();
     const c = stage.cam;
     const s = P.sizeScale;
@@ -561,5 +600,5 @@ EV.Player = (function () {
   /** 0..1 şarj oranı (arayüz için). */
   function charge(game) { const P = game.player; return P && P.charge > 0 ? chargeFrac(P.charge) : -1; }
 
-  return { create, rebuild, update, updateCamera, cycleLock, charge };
+  return { create, rebuild, update, updateCamera, cycleLock, charge, toggleFps };
 })();

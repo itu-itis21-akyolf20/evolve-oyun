@@ -1,36 +1,51 @@
-// Mobil nişan yardımı: en yakına kilitlenir, kamera hedefe döner, 🤖 kapatınca bırakır; 🎯 basılı tut = şarj
+// Mobil yumuşak hedefleme: öndeki seçilir (arkadaki değil), saldırısız 3 sn'de bırakılır,
+// kamera zorla dönmez; 🔒 sert kilit kamerayı çevirir, hedef ölünce bırakır; arkadan saldırı oku
 const wait = async (fn, ms) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) return false; await new Promise((r) => setTimeout(r, 50)); } return true; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 await wait(() => window.EV && EV.Game && EV.MobileAssist && document.getElementById('mTouch'), 15000);
 T.start('normal');
 const G = EV.Game, P = G.player, root = document.getElementById('mTouch');
 const def = EV.MOBS.ENEMIES[0][1];
-G.enemies.slice().forEach((e) => { if (!e.ally && e.alive) EV.Enemies.despawn(G, G.enemies.indexOf(e)); });
+const clear = () => G.enemies.slice().forEach((e) => { if (!e.ally && e.alive) EV.Enemies.despawn(G, G.enemies.indexOf(e)); });
 const pp = P.group.position;
-const behind = P.yaw + Math.PI * 0.8;          // hedefi kameranın arkasına koy
-const e = EV.Enemies.make(G, def, { pos: { x: pp.x + Math.sin(behind) * 10, z: pp.z + Math.cos(behind) * 10 }, hp: 1e6, dmg: 0 });
-e.behavior = 'passive'; e.speed = 0;
+const at = (ang, d) => { const e = EV.Enemies.make(G, def, { pos: { x: pp.x + Math.sin(ang) * d, z: pp.z + Math.cos(ang) * d }, hp: 1e6, dmg: 0 }); e.behavior = 'passive'; e.speed = 0; return e; };
+let tid = 100;
+const tap = (sel, hold) => { const b = root.querySelector(sel); const t = new Touch({ identifier: ++tid, target: b, clientX: 0, clientY: 0 });
+  b.dispatchEvent(new TouchEvent('touchstart', { changedTouches: [t], touches: [t], bubbles: true, cancelable: true }));
+  return () => b.dispatchEvent(new TouchEvent('touchend', { changedTouches: [t], touches: [], bubbles: true, cancelable: true })); };
+const r = {};
+
+clear();
+const face = P.group.rotation.y;
+const front = at(face, 14);          // önde, uzakça
+const back = at(face + Math.PI, 6);  // arkada, daha yakın
+await sleep(300);
+r.noLockBeforeAttack = P.lockTarget == null;
 const yaw0 = P.yaw;
-await new Promise((r) => setTimeout(r, 1500));
-const r = { assistOn: EV.MobileAssist.isOn(), locked: P.lockTarget === e };
-const want = Math.atan2(e.group.position.x - pp.x, e.group.position.z - pp.z);
-r.camTurnedToTarget = Math.abs(EV.U.wrapAngle(P.yaw - want)) < 0.3 && Math.abs(EV.U.wrapAngle(P.yaw - yaw0)) > 1;
-// 🎯 basılı tut → şarj → bırak
-let tid = 50;
-const touch = (type, target) => { const t = new Touch({ identifier: tid, target, clientX: 0, clientY: 0 }); target.dispatchEvent(new TouchEvent(type, { changedTouches: [t], touches: type === 'touchend' ? [] : [t], bubbles: true, cancelable: true })); };
-const sh = root.querySelector('.mShoot');
-touch('touchstart', sh);
-await new Promise((r2) => setTimeout(r2, 1100));
-r.charged = EV.Player.charge(G);
-const d0 = G.stats.totalDmg;
-touch('touchend', sh);
-await new Promise((r2) => setTimeout(r2, 800));
-r.chargedShotDmg = Math.round(G.stats.totalDmg - d0);
-// 🤖 kapat
-tid++;
-const ab = root.querySelector('.mAssist');
-touch('touchstart', ab); touch('touchend', ab);
-await new Promise((r2) => setTimeout(r2, 200));
-r.offReleases = !EV.MobileAssist.isOn() && P.lockTarget == null && ab.classList.contains('off');
-touch('touchstart', ab); touch('touchend', ab);
-r.skillBorder = getComputedStyle(root.querySelector('.m-skill1')).getPropertyValue('--sk');
+let up = tap('.mAtk'); await sleep(150); up();
+r.picksFrontNotCloserBehind = P.lockTarget === front;
+await sleep(800);
+r.cameraNotForced = Math.abs(EV.U.wrapAngle(P.yaw - yaw0)) < 0.2;
+await sleep(2600);
+r.releasedAfter3s = P.lockTarget == null;
+
+// sert kilit: arkadakine kamera döner, ölünce bırakır ve başkasına atlamaz
+P.lockTarget = back;
+tap('.mAtk')();                      // hedef zaten 'back' (sticky) — yine de kilit butonu mevcut hedefi alır
+P.lockTarget = back;
+tap('[data-a="hardlock"]')();
+r.hardOn = EV.MobileAssist.hardTarget() === back && root.querySelector('[data-a="hardlock"]').classList.contains('active');
+await sleep(1500);
+const want = Math.atan2(back.group.position.x - pp.x, back.group.position.z - pp.z);
+r.hardTurnsCamera = Math.abs(EV.U.wrapAngle(P.yaw - want)) < 0.35;
+G.killEnemy(back);
+await sleep(200);
+r.hardReleasedOnDeath = EV.MobileAssist.hardTarget() == null && P.lockTarget !== front;
+
+// arkadan saldırı: ekran dışı ok
+clear();
+const sneaky = at(P.yaw + Math.PI, 5);
+sneaky.atkTarget = P; sneaky.atkT = 5; sneaky.behavior = 'aggressive';
+await sleep(300);
+r.threatArrow = Array.from(document.querySelectorAll('.mThreat')).some((a) => !a.hidden);
 return r;

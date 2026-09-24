@@ -6,7 +6,8 @@
    Düğmeler : ⚔️ yakın saldırı (basılı tut) · 🎯 uzak atış (basılı tut)
               💨 atılım · Q E F yetenek · R ultimate
               Yer hedefli yetenek: düğmeye bas, parmağı kaydırarak nişan al, bırak
-   Üst sol  : ☰ menü/liderlik · 🎒 çanta · 📜 yapı · 🔒 hedef · ⛶ tam ekran
+   Üst sol  : ☰ menü/liderlik · 🎒 çanta · 📜 yapı · 🔒 kamera kilidi ·
+              🤖 otomatik hedef · ⛶ tam ekran
 
    Her dokunuş kimliğiyle izlenir (çoklu dokunma): bir parmak yürürken
    diğeri bakıp saldırabilir. Üretilen her şey EV.MobileBridge'e gider.
@@ -34,8 +35,9 @@
       '<button data-a="menu" title="Menü">☰</button>' +
       '<button data-a="bag" title="Çanta">🎒</button>' +
       '<button data-a="build" title="Yapı">📜</button>' +
-      '<button data-a="lock" title="Sonraki hedef">🔒</button>' +
+      '<button data-a="hardlock" title="Kamerayı hedefe kilitle">🔒</button>' +
       '<button data-a="assist" title="Otomatik hedef" class="mAssist">🤖</button>' +
+      '<button data-a="view" title="Birinci / üçüncü şahıs">👁️</button>' +
       '<button data-a="full" title="Tam ekran">⛶</button>' +
     '</div>' +
     '<div id="mBtns">' +
@@ -90,7 +92,8 @@
       if (btn) {
         const a = btn.dataset.a;
         if (a === 'full') { fullscreen(); continue; }
-        if (a === 'assist') { btn.classList.toggle('off', !EV.MobileAssist.toggle()); continue; }
+        if (a === 'assist') { EV.MobileAssist.toggleSoft(); continue; }
+        if (a === 'hardlock') { EV.MobileAssist.toggleHard(); continue; }
         btn.classList.add('on');
         touches.set(t.identifier, { kind: 'btn', action: a, btn, x: t.clientX, y: t.clientY });
         B.action(a, true);
@@ -191,8 +194,5 @@
   }
   setInterval(refresh, 120);
   refresh();
-  setTimeout(() => {
-    const ab = root.querySelector('.mAssist');
-    if (ab && EV.MobileAssist) ab.classList.toggle('off', !EV.MobileAssist.isOn());
-  }, 0);
+
 })();

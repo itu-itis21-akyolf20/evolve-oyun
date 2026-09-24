@@ -20,7 +20,7 @@ EV.MobileBridge = (function () {
 
   const ACTION_KEY = {
     dash: 'Space', skill1: 'KeyQ', skill2: 'KeyE', skill3: 'KeyF', ult: 'KeyR',
-    lock: 'KeyT', bag: 'Tab', build: 'KeyK', menu: 'Escape',
+    lock: 'KeyT', bag: 'Tab', build: 'KeyK', menu: 'Escape', view: 'KeyV',
   };
   const MOVE_KEYS = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
   const DEAD = 0.35;                 // çubuğun bu kadarı eğilmeden yön sayılmaz
@@ -68,15 +68,14 @@ EV.MobileBridge = (function () {
 
   /** Bir eylem başladı / bitti. */
   function action(name, down) {
+    // saldırı/yetenek anında hedef seçilir (yumuşak hedefleme — assist.js)
+    if (down && /^(attack|shoot|skill|ult)/.test(name) && EV.MobileAssist) EV.MobileAssist.onAction();
     if (name === 'attack') {
       attacking = down;
       mouseButtons();
       return;
     }
     if (name === 'shoot') {
-      // hedef kilitli değilse ekrandaki en yakına kilitlen: parmakla ince nişan zor
-      const P = EV.Game && EV.Game.player;
-      if (down && P && !(P.lockTarget && P.lockTarget.alive)) { key('KeyT', true); key('KeyT', false); }
       shooting = down;
       mouseButtons();
       return;
@@ -84,7 +83,7 @@ EV.MobileBridge = (function () {
     const code = ACTION_KEY[name];
     if (!code) return;
     // anlık eylemler (menü, çanta…) bas-bırak; yetenekler basılı tutulabilir (yer hedefliler için)
-    if (name === 'menu' || name === 'bag' || name === 'build' || name === 'lock') {
+    if (name === 'menu' || name === 'bag' || name === 'build' || name === 'lock' || name === 'view') {
       if (down) { key(code, true); key(code, false); }
       return;
     }
@@ -105,6 +104,6 @@ EV.MobileBridge = (function () {
   EV.Input.releaseLock = function () {};
   EV.Input.mouse.locked = true;
 
-  const api = { applyMove, applyLook, action, releaseAll, lastLookAt: 0 };
+  const api = { applyMove, applyLook, action, releaseAll, lastLookAt: 0, attacking: () => attacking || shooting };
   return api;
 })();

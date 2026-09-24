@@ -90,3 +90,12 @@ body.mobile #cardRow .cname{font-size:15px}
 .mSkill{border-color:var(--sk,var(--m-btn-bd)) !important;border-width:3px !important}
 .mSkill .key{position:absolute;z-index:2;right:3px;bottom:1px;font-size:10px;color:#fff;opacity:.8;text-shadow:0 1px 2px #000}
 .mAssist.off{opacity:.45;filter:grayscale(1)}
+
+/* sert kilit açıkken 🔒 parlar */
+#mTop button.active{border-color:var(--m-on);box-shadow:0 0 10px var(--m-on)}
+/* ekran dışı tehdit okları */
+#mThreats{position:absolute;inset:0;z-index:7;pointer-events:none}
+.mThreat{position:absolute;width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;
+  border-bottom:26px solid #ff3d3d;filter:drop-shadow(0 0 6px #ff0000);animation:mThreat .5s ease-in-out infinite alternate}
+.mThreat[hidden]{display:none}
+@keyframes mThreat{from{opacity:.55}to{opacity:1}}
