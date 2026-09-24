@@ -134,7 +134,7 @@ function readBody(req) {
   });
 }
 
-const ALLOWED = /^\/(index\.html|style\.css|js\/[\w\-/]+\.js|vendor\/[\w\-.]+\.js)$/;
+const ALLOWED = /^\/(index\.html|mobile\.html|style(-extra)?\.css|mobile\/[\w\-.]+\.(js|css)|js\/[\w\-/]+\.js|vendor\/[\w\-.]+\.js)$/;
 
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x');

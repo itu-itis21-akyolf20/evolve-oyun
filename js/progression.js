@@ -35,7 +35,7 @@ EV.Build = (function () {
   }
 
   function freshLegacy() {
-    return { genes: [], parts: [], echoes: [], combos: {} };
+    return { genes: [], parts: [], echoes: [], combos: {}, trophies: 0, forms: {}, heroes: [] };
   }
 
   /** Seviye (L) -> (L+1) için XP. Aşamanın EVO hedefine bağlı: ~13 seviye/aşama. */
@@ -65,6 +65,11 @@ EV.Build = (function () {
     L.genes.forEach((id) => { const g = DATA.gene(id); if (g) addMods(m, g.mods); });
     L.parts.forEach((tag) => { const p = DATA.partFor(tag); if (p) addMods(m, p.mods); });
     if (game.inv) addMods(m, EV.Items.mods(game));
+    // Avcı Trofesi (apex yenince) ve seçilen beden
+    const tr = L.trophies || 0;
+    if (tr) addMods(m, { dmg: 0.04 * tr, maxHp: 0.04 * tr });
+    const form = EV.FORMS.get(game.stageIndex, (L.forms || {})[game.stageIndex]);
+    if (form) addMods(m, form.mods);
     b.mods = m;
 
     const hooks = { basicSt: [], hitChanceSt: [], critSt: [], onHurtSt: [], dashSt: [] };

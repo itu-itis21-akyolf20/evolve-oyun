@@ -7,6 +7,11 @@
    binmesinler) + takılma algılayıcı (ilerleyemezse yan yola sapar).
    Temel saldırı windup'lıdır: vuruş anında menzilden çıktıysan ıskalar.
    Boss / apex / türe özgü yetenekler boss.js'dedir.
+
+   Ek davranışlar: flyer (uçar, döner, dalar) · bomber (fitil + patlama)
+   healer · summoner · hopper · ambush (kamufle) · buffer · treasure.
+   Şampiyonlar (Diablo tarzı): ⭐ + 1-2 ek özellik, 4 kat ödül.
+   Nesil arttıkça: daha çok düşman, IV/V seviyeler, daha çok şampiyon.
    ============================================================ */
 window.EV = window.EV || {};
 
@@ -22,23 +27,47 @@ EV.Enemies = (function () {
   let nextId = 1;
   let packId = 1;
 
-  /* Aynı türün 3 seviyesi: II = +%20 can / +%10 hasar, III = +%40 / +%20.
-     Biraz daha iri görünürler, adlarında II/III yazar, ödülleri de büyür. */
+  /* Aynı türün seviyeleri: II = +%20 can / +%10 hasar, III = +%40 / +%20;
+     IV ve V sadece sonraki nesillerde. İri görünürler, adlarında yazar, ödülleri büyür. */
   const VARIANT = [null,
     { hp: 1.0, dmg: 1.0, size: 1.0, reward: 1.0, suffix: '' },
     { hp: 1.2, dmg: 1.1, size: 1.1, reward: 1.25, suffix: ' II' },
     { hp: 1.4, dmg: 1.2, size: 1.2, reward: 1.5, suffix: ' III' },
+    { hp: 1.75, dmg: 1.32, size: 1.28, reward: 2.0, suffix: ' IV' },
+    { hp: 2.2, dmg: 1.45, size: 1.36, reward: 2.6, suffix: ' V' },
   ];
 
-  /** II ve III seviye 4'ten / 7'den sonra, seviyeyle yavaşça artan seyreklikte çıkar
-   *  (Normal: en fazla %18 II, %6 III; Dehşet'te 1.6 katı). */
+  /** Nesil 0: II seviye 4'ten, III 7'den sonra, seyrek (en fazla %18 / %6).
+   *  Her nesil II/III'ü artırır, nesil 1'den IV, nesil 2'den V açılır. Dehşet ×1.6. */
   function rollVariant(game) {
-    const L = game.build.level;
+    const L = game.build.level, g = game.generation;
     const k = game.diff.id === 'dehset' ? 1.6 : 1;
-    const p3 = L < 7 ? 0 : Math.min(0.06, 0.01 * (L - 6)) * k;
-    const p2 = L < 4 ? 0 : Math.min(0.18, 0.04 + 0.012 * (L - 4)) * k;
-    const r = Math.random();
-    return r < p3 ? 3 : r < p3 + p2 ? 2 : 1;
+    const p5 = g >= 2 ? Math.min(0.12, 0.03 * (g - 1)) * k : 0;
+    const p4 = g >= 1 ? Math.min(0.2, 0.05 * g) * k : 0;
+    const p3 = Math.min(0.25, (L < 7 ? 0 : Math.min(0.06, 0.01 * (L - 6))) + 0.06 * g) * k;
+    const p2 = Math.min(0.35, (L < 4 ? 0 : Math.min(0.18, 0.04 + 0.012 * (L - 4))) + 0.08 * g) * k;
+    let r = Math.random();
+    if ((r -= p5) < 0) return 5;
+    if ((r -= p4) < 0) return 4;
+    if ((r -= p3) < 0) return 3;
+    return r < p2 ? 2 : 1;
+  }
+
+  /* ---------------- şampiyonlar ---------------- */
+  const CHAMP = {
+    fast: { name: 'Hızlı' }, giant: { name: 'Dev' }, vamp: { name: 'Vampirik' },
+    explosive: { name: 'Patlayıcı' }, shielded: { name: 'Kalkanlı' }, regen: { name: 'Yenilenen' },
+  };
+  const CHAMP_IDS = Object.keys(CHAMP);
+
+  /** Paket başına şampiyon lider olasılığı: seviye 5'ten sonra, nesille artar. */
+  function rollChampion(game) {
+    if (game.build.level < 5 && game.generation === 0) return null;
+    const ch = Math.min(0.2, 0.035 + 0.035 * game.generation) * (game.diff.id === 'dehset' ? 1.3 : 1);
+    if (Math.random() > ch) return null;
+    const n = game.generation >= 2 ? 2 : 1;
+    const list = CHAMP_IDS.slice().sort(() => Math.random() - 0.5);
+    return list.slice(0, n);
   }
 
   /* =========================================================
@@ -128,7 +157,7 @@ EV.Enemies = (function () {
   const _tc = new THREE.Color();
   function updateBar(game, e) {
     const bar = e.hpBar;
-    const show = e.isAlpha || e.isApex || e.isMini || e === game.player.lockTarget || e === game.player.hover ||
+    const show = e.isAlpha || e.isApex || e.isMini || e.isNemesis || e.isChampion || e.isTreasure || e === game.player.lockTarget || e === game.player.hover ||
       (game.time - (e.lastHitT || -99) < 4) || (e.ally && e.hp < e.maxHp);
     bar.visible = !!show;
     if (!show) return;
@@ -138,6 +167,8 @@ EV.Enemies = (function () {
     fill.position.x = -width * (1 - pct) * 0.5;
     if (e.ally) fill.material.color.setHex(0x6fd8ff);
     else if (e.peaceful) fill.material.color.setHex(0xff8fc0);
+    else if (e.isChampion || e.isTreasure) fill.material.color.setHex(0xffc83d);
+    else if (e.isNemesis) fill.material.color.setHex(0xc27bff);
     else fill.material.color.copy(_tc.copy(_cLow).lerp(_cFull, pct));
     const sts = Status.list(e);
     for (let i = 0; i < pips.length; i++) {
@@ -157,7 +188,7 @@ EV.Enemies = (function () {
     if (kind === 'alpha') return { hp: D.hp * g * (1 + game.generation * 0.1), dmg: D.dmg * g };
     // Seviye ölçeği 16'da durur: XP ölümde kaybolmadığı için zorlanan oyuncu
     // seviye atlamaya devam ediyor, düşmanlar üstel büyüyüp onu kapana kıstırıyordu.
-    const Lc = Math.min(L, 16);
+    const Lc = Math.min(L, 16 + 4 * game.generation);
     return {
       hp: Math.pow(T.enemyHpLvl, Lc - 1) * D.hp * g,
       dmg: Math.pow(T.enemyDmgLvl, Lc - 1) * D.dmg * g,
@@ -167,24 +198,40 @@ EV.Enemies = (function () {
   function make(game, def, opts) {
     opts = opts || {};
     const V = VARIANT[opts.variant || 1];
-    const body = opts.body || (V.size !== 1 ? Object.assign({}, def.body, { scale: def.body.scale * V.size }) : def.body);
-    const group = EV.Creature.build(body);
+    const champ = opts.champ || null;
+    const size = V.size * (champ && champ.indexOf('giant') >= 0 ? 1.3 : 1);
+    const body = opts.body || (size !== 1 ? Object.assign({}, def.body, { scale: def.body.scale * size }) : def.body);
+    const group = EV.Creature.build(body, opts.isAlpha || opts.isApex || opts.boss ? 'boss' : 'creature');
     const spot = opts.pos || W.randomSpawn(game.player.group.position, T.spawnMin, T.spawnMax);
     group.position.set(spot.x, W.groundY(spot.x, spot.z), spot.z);
     group.rotation.y = U.rand(0, Math.PI * 2);
     game.scene.add(group);
 
-    const hp = opts.hp != null ? opts.hp : def.hp;
+    let hp = opts.hp != null ? opts.hp : def.hp;
+    let reward = V.reward;
+    let dmg0 = opts.dmg != null ? opts.dmg : def.dmg;
+    let speed0 = (def.speed || 6) * (opts.ally ? 1 : game.diff.speed);
+    if (champ) {
+      hp *= 2.2 * (champ.indexOf('giant') >= 0 ? 1.8 : 1);
+      dmg0 *= 1.3 * (champ.indexOf('giant') >= 0 ? 1.2 : 1);
+      if (champ.indexOf('fast') >= 0) speed0 *= 1.45;
+      reward *= 4;
+    }
     const e = {
       id: nextId++, def,
-      name: opts.name || def.name + V.suffix,
+      name: opts.name || (champ ? '⭐ ' + champ.map((c) => CHAMP[c].name).join(' ') + ' ' : '') + def.name + V.suffix,
       lvl: opts.lvl || game.build.level + ((opts.variant || 1) - 1) * 2,
       variant: opts.variant || 1,
       maxHp: hp, hp,
-      dmg: opts.dmg != null ? opts.dmg : def.dmg,
-      speed: (def.speed || 6) * (opts.ally ? 1 : game.diff.speed),
-      armor: def.armor || 0,
-      evo: (def.evo || 0) * V.reward, xp: (def.xp != null ? def.xp : (def.evo || 0)) * V.reward,
+      dmg: dmg0,
+      speed: speed0,
+      armor: Math.min(0.6, (def.armor || 0) + (champ && champ.indexOf('shielded') >= 0 ? 0.35 : 0)),
+      evo: (def.evo || 0) * reward, xp: (def.xp != null ? def.xp : (def.evo || 0)) * reward,
+      isChampion: !!champ, champ, isTreasure: def.behavior === 'treasure',
+      flyH: def.fly || 0, flyNow: def.fly || 0, diveT: 0, hopT: 0, hopDur: 0,
+      orbitA: U.rand(0, Math.PI * 2), orbitDir: Math.random() < 0.5 ? 1 : -1,
+      healCd: U.rand(1.5, 3), summonCd: U.rand(2, 4), buffCd: U.rand(2, 5), buffT: 0, children: 0,
+      ambushing: def.behavior === 'ambush', fused: false, lastHurtT: -99,
       aggro: def.aggro || 14,
       behavior: opts.ally ? 'ally' : (def.behavior || 'aggressive'),
       atk: def.atk || { range: 1.5, windup: 0.45, cd: 1.4 },
@@ -198,11 +245,28 @@ EV.Enemies = (function () {
       t: U.rand(0, 100), speed01: 0, stuckT: 0, lastD: 0, detour: null, stun: 0, moving: false,
       lastHitT: -99,
     };
+    e.baseDmg = e.dmg;
+    e.baseSpeed = e.speed;
+    if (champ && champ.indexOf('fast') >= 0) e.atk = Object.assign({}, e.atk, { cd: e.atk.cd * 0.75 });
+    if (e.flyH) group.userData.flying = true;
+    if (champ) EV.Creature.setGlow(group, { r: 0.32, g: 0.22, b: 0.0 });
+    if (e.isTreasure) { EV.Creature.setGlow(group, { r: 0.35, g: 0.28, b: 0.05 }); e.life = 25; }
+    if (e.ambushing) camo(e, true);
     const barW = Math.max(1.3, Math.min(5, e.radius * 2.2));
     e.hpBar = makeBar(barW, group.userData.cap.top + 0.7);
     group.add(e.hpBar);
     game.enemies.push(e);
     return e;
+  }
+
+  /** Pusucu kamuflajı: yarı saydam. */
+  function camo(e, on) {
+    e.group.traverse((o) => {
+      if (!o.material || o.isSprite) return;
+      o.material.transparent = on || o.material.transparent;
+      if (o.userData.op0 == null) o.userData.op0 = o.material.opacity;
+      o.material.opacity = on ? 0.28 : o.userData.op0;
+    });
   }
 
   function despawn(game, index) {
@@ -220,27 +284,42 @@ EV.Enemies = (function () {
   }
 
   /* ---------------- sürüler ---------------- */
-  function unlockedTier(game, pool) {
-    const L = game.build.level;
-    return Math.min(pool.length - 1, 3 + Math.floor((L - 1) / 2));
+  /** Açık en yüksek tier: seviye 1 → 2, her 3 seviyede +1 (5'te tavan); sonraki nesillerde hepsi açık. */
+  function maxTier(game) {
+    if (game.generation > 0) return 9;
+    return Math.min(5, 2 + Math.floor((game.build.level - 1) / 3));
   }
 
-  function spawnPack(game, near) {
-    const pool = EV.MOBS.ENEMIES[game.stageIndex];
-    const maxIdx = unlockedTier(game, pool);
-    const idx = U.randInt(0, maxIdx);
-    const def = pool[Math.random() < 0.15 ? maxIdx : idx];
+  function spawnPack(game, near, opts) {
+    opts = opts || {};
+    const top = maxTier(game);
+    const pool = EV.MOBS.ENEMIES[game.stageIndex].filter((d) => d.spawn !== false && d.tier <= top && (!opts.filter || opts.filter(d)));
+    if (!pool.length) return [];
+    const best = pool.reduce((m, d) => Math.max(m, d.tier), 0);
+    const def = Math.random() < 0.15 ? U.pick(pool.filter((d) => d.tier === best)) : U.pick(pool);
     const sc = statScale(game, 'normal');
-    const n = U.randInt(def.pack[0], def.pack[1]);
-    const c = W.randomSpawn(near || game.player.group.position, T.spawnMin, T.spawnMax, 3);
+    const n = opts.count || U.randInt(def.pack[0], def.pack[1]);
+    const c = opts.at || W.randomSpawn(near || game.player.group.position, T.spawnMin, T.spawnMax, 3);
     const pid = packId++;
+    const champ = opts.noChamp ? null : rollChampion(game);
+    const out = [];
     for (let i = 0; i < n; i++) {
       const p = { x: c.x + U.rand(-4, 4), z: c.z + U.rand(-4, 4) };
       if (W.blocked(p.x, p.z, 1)) { p.x = c.x; p.z = c.z; }
       W.clampToPlay(p);
       const v = rollVariant(game);
-      make(game, def, { pos: p, hp: def.hp * sc.hp * VARIANT[v].hp, dmg: def.dmg * sc.dmg * VARIANT[v].dmg, pack: pid, variant: v });
+      out.push(make(game, def, { pos: p, hp: def.hp * sc.hp * VARIANT[v].hp, dmg: def.dmg * sc.dmg * VARIANT[v].dmg, pack: pid, variant: v,
+        champ: i === 0 ? champ : null }));
     }
+    return out;
+  }
+
+  /** Aynı türden tek yaratık (bölünme / çağırma): mevcut ölçekle. */
+  function spawnOne(game, def, pos, extra) {
+    const sc = statScale(game, 'normal');
+    const p = { x: pos.x + U.rand(-1.5, 1.5), z: pos.z + U.rand(-1.5, 1.5) };
+    W.clampToPlay(p);
+    return make(game, def, Object.assign({ pos: p, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg }, extra || {}));
   }
 
   /** Oyuncunun çevresindeki (TUNE.nearRadius) sıradan düşman sayısı.
@@ -252,14 +331,15 @@ EV.Enemies = (function () {
     let n = 0;
     for (let i = 0; i < game.enemies.length; i++) {
       const e = game.enemies[i];
-      if (!e.alive || e.ally || e.isAlpha || e.isApex || e.isMini || e.peaceful) continue;
+      if (!e.alive || e.ally || e.isAlpha || e.isApex || e.isMini || e.isNemesis || e.isTreasure || e.peaceful) continue;
       if (e.group.position.distanceToSquared(p) < R2) n++;
     }
     return n;
   }
 
   function targetCount(game) {
-    const base = Math.round(T.maxEnemies * game.diff.spawn) + Math.min(game.generation, 8);
+    // nesil başına +3 (en fazla +21); Kan Ayı olayında ×1.5
+    const base = Math.round((T.maxEnemies * game.diff.spawn + Math.min(game.generation * 3, 21)) * (game.bloodMoon > 0 ? 1.5 : 1));
     return game.bossActive ? Math.round(base * 0.35) : base;
   }
 
@@ -273,7 +353,7 @@ EV.Enemies = (function () {
     const p = game.player.group.position;
     for (let i = game.enemies.length - 1; i >= 0; i--) {
       const e = game.enemies[i];
-      if (!e.alive || e.ally || e.isAlpha || e.isApex || e.isMini) continue;
+      if (!e.alive || e.ally || e.isAlpha || e.isApex || e.isMini || e.isNemesis) continue;
       if (e.isMate && game.player.mateTarget === e) continue;
       if (e.group.position.distanceTo(p) > T.despawn) despawn(game, i);
     }
@@ -350,12 +430,12 @@ EV.Enemies = (function () {
     }
   }
 
-  function spawnMini(game) {
-    const def = EV.MOBS.MINIS[game.stageIndex];
+  function spawnMini(game, def) {
+    def = def || EV.MOBS.MINIS[game.stageIndex][0];
     const sc = statScale(game, 'normal');
     const name = game.generation > 0 ? 'Kadim ' + def.name : def.name;
     const pos = W.randomSpawn(game.player.group.position, 18, 26, 4);
-    const e = make(game, def, { pos, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg, name, lvl: game.build.level + 4 });
+    const e = make(game, def, { pos, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg, name, lvl: game.build.level + 4, boss: true });
     e.isMini = true;
     e.behavior = 'boss';
     EV.Boss.init(game, e, def.kit);
@@ -364,6 +444,75 @@ EV.Enemies = (function () {
     U.audio.roar();
     game.toast('⚔️ ARA BOSS: ' + name.toLocaleUpperCase('tr-TR') + '<br><span class="sub">Yen: garanti Değerli eşya + Gen Özü</span>', '#ffb35a', 3200);
     return e;
+  }
+
+  /** Hazine yaratığı: kaçar; 25 sn içinde yakalanırsa bol ödül. */
+  function spawnTreasure(game) {
+    const def = EV.MOBS.TREASURE[game.stageIndex];
+    const sc = statScale(game, 'normal');
+    const pos = W.randomSpawn(game.player.group.position, 16, 24, 3);
+    const e = make(game, def, { pos, hp: def.hp * sc.hp, dmg: 0, noChamp: true });
+    EV.FX.ring(e.group.position, 0xffd23d, 6, 0.8);
+    game.toast('✨ ' + def.name.toLocaleUpperCase('tr-TR') + ' GÖRÜNDÜ<br><span class="sub">25 sn içinde yakala: bol Gen Özü + 2 eşya</span>', '#ffd23d', 3000);
+    return e;
+  }
+
+  /** Sürü dalgası: oyuncunun çevresinde halka halinde, hepsi saldırgan. */
+  function spawnHorde(game) {
+    const pp = game.player.group.position;
+    const n = Math.min(22, 10 + game.generation * 2);
+    const packs = Math.ceil(n / 4);
+    let made = 0;
+    for (let i = 0; i < packs; i++) {
+      const a = (i / packs) * Math.PI * 2 + U.rand(-0.3, 0.3);
+      const at = { x: pp.x + Math.sin(a) * U.rand(22, 27), z: pp.z + Math.cos(a) * U.rand(22, 27) };
+      W.clampToPlay(at);
+      const list = spawnPack(game, null, { at, count: Math.min(4, n - made), noChamp: i > 0,
+        filter: (d) => d.behavior !== 'passive' && d.behavior !== 'treasure' });
+      list.forEach((e) => { e.aggroT = 40; });
+      made += list.length;
+    }
+    return made;
+  }
+
+  /** Geçmiş benlik: önceki nesildeki kahramanın, ara boss gücünde. */
+  function spawnNemesis(game, snap) {
+    const stage = game.stageIndex;
+    const ref = EV.MOBS.MINIS[stage][0];
+    const sc = statScale(game, 'normal');
+    const spec = JSON.parse(JSON.stringify(snap.spec));
+    spec.scale = (spec.scale || 1) * 1.15;
+    const def = { id: 'nemesis', kit: 'nemesis', name: snap.name, tier: 7, hp: ref.hp * 1.35, dmg: ref.dmg * 1.1,
+      speed: Math.max(6, (snap.speed || 8) * 0.85), evo: 0, xp: 0, body: spec };
+    const pos = W.randomSpawn(game.player.group.position, 18, 26, 4);
+    const e = make(game, def, { pos, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg, lvl: game.build.level + 5, noChamp: true, boss: true });
+    e.isNemesis = true;
+    e.nemesisKinds = snap.kinds || [];
+    e.behavior = 'boss';
+    EV.Boss.init(game, e, 'nemesis');
+    EV.Creature.setGlow(e.group, { r: 0.22, g: 0.05, b: 0.35 });
+    game.nemesis = e;
+    EV.FX.ring(e.group.position, 0xc27bff, 18, 1.0);
+    U.audio.roar();
+    game.toast('👤 GEÇMİŞ BENLİĞİN<br><span class="sub">' + snap.name + ' — seni tanıyor. Yen: Destansı eşya</span>', '#c27bff', 3500);
+    return e;
+  }
+
+  /* =========================================================
+     Ölüm tepkileri (main.killEnemy çağırır)
+     ========================================================= */
+  function onKilled(game, e) {
+    const pos = e.group.position;
+    const sp = e.def.splitInto;
+    if (sp) {
+      const d = EV.MOBS.find(game.stageIndex, sp.id);
+      for (let i = 0; d && i < sp.count; i++) {
+        const c = spawnOne(game, d, pos);
+        c.aggroT = 10;
+      }
+      if (d) EV.FX.burst(pos.clone().setY(pos.y + 1), 0xc8d84a, 10, 6);
+    }
+    if (e.champ && e.champ.indexOf('explosive') >= 0) EV.Boss.deathBlast(game, pos.x, pos.z, 4.2, e.dmg * 1.6);
   }
 
   const SUMMON_NAME = ['Tomurcuk', 'Kopya', 'Kurt'];
@@ -404,7 +553,7 @@ EV.Enemies = (function () {
   const _av = { x: 0, z: 0 };
 
   /** e'yi (tx,tz)'ye doğru hareket ettirir; varınca false döner. */
-  function steer(game, e, tx, tz, spd, dt, stopAt) {
+  function steer(game, e, tx, tz, spd, dt, stopAt, airborne) {
     const pos = e.group.position;
     let dx = tx - pos.x, dz = tz - pos.z;
     const dist = Math.hypot(dx, dz);
@@ -430,9 +579,11 @@ EV.Enemies = (function () {
 
     const l = Math.hypot(dx, dz) || 1;
     let vx = dx / l, vz = dz / l;
-    W.avoid(pos.x, pos.z, vx, vz, e.radius, 2.5 + e.radius * 1.6, _av);
-    vx += _av.x;
-    vz += _av.z;
+    if (!airborne && !e.flyH) {
+      W.avoid(pos.x, pos.z, vx, vz, e.radius, 2.5 + e.radius * 1.6, _av);
+      vx += _av.x;
+      vz += _av.z;
+    }
 
     // ayrışma: aynı noktaya yığılmasınlar
     let sx = 0, sz = 0;
@@ -457,6 +608,9 @@ EV.Enemies = (function () {
   /* =========================================================
      Hedef seçimi (düşmanlar için)
      ========================================================= */
+  const HUNTERS = { aggressive: 1, ranged: 1, flyer: 1, bomber: 1, hopper: 1, buffer: 1, healer: 1, summoner: 1 };
+  const KEEP_AWAY = { ranged: 1, healer: 1, summoner: 1 };
+
   function pickHostileTarget(game, e) {
     const P = game.player;
     const pos = e.group.position;
@@ -474,7 +628,7 @@ EV.Enemies = (function () {
     const hidden = P.hidden;
     if (hidden && dP > 4) e.aggroT = 0;
     const sight = hidden ? 4 : e.aggro;
-    const chasing = (e.behavior === 'aggressive' || e.behavior === 'ranged') ? (dP < sight || e.aggroT > 0) : e.aggroT > 0;
+    const chasing = HUNTERS[e.behavior] ? (dP < sight || e.aggroT > 0) : e.aggroT > 0;
     if (!chasing && !(egg && dE < 14 && e.behavior === 'aggressive')) return null;
 
     if (egg && dE < EV.Mating.M.eggAggro && dE + 8 < dP) return egg;
@@ -509,6 +663,22 @@ EV.Enemies = (function () {
       if (e.ally) {
         e.life -= dt;
         if (e.life <= 0) { EV.FX.burst(pos.clone().setY(pos.y + 1), 0x9de89d, 6, 5); despawn(game, i); continue; }
+      }
+      if (e.isTreasure) {
+        e.life -= dt;
+        if (e.life <= 0) {
+          EV.FX.burst(pos.clone().setY(pos.y + 1), 0xffd23d, 16, 8);
+          game.toast(e.name + ' kaçtı…', '#cfc6b8', 1500);
+          despawn(game, i);
+          continue;
+        }
+      }
+      if (e.buffT > 0) {                                  // sırtlan çığlığı bitti
+        e.buffT -= dt;
+        if (e.buffT <= 0) { e.dmg = e.baseDmg; e.speed = e.baseSpeed; }
+      }
+      if (e.champ && e.champ.indexOf('regen') >= 0 && game.time - e.lastHitT > 3 && e.hp < e.maxHp) {
+        e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.025 * dt);
       }
 
       if (e.st) { Status.tick(game, e, dt); if (!e.alive) continue; }
@@ -551,8 +721,25 @@ EV.Enemies = (function () {
         }
       }
 
-      W.resolveCollision(pos, e.radius);
-      pos.y = W.groundY(pos.x, pos.z);
+      const gy = W.groundY(pos.x, pos.z);
+      if (e.flyH) {
+        // uçanlar engellerin üstünden geçer; dalışta alçalır
+        W.clampToPlay(pos);
+        if (e.diveT > 0) e.diveT -= dt;
+        const want = e.diveT > 0 ? Math.min(1.1, e.flyH) : e.flyH;
+        e.flyNow = U.lerp(e.flyNow, want, Math.min(1, dt * (e.diveT > 0 ? 7 : 2.5)));
+        pos.y = gy + e.flyNow;
+        if (e.group.userData.blob) e.group.userData.blob.position.y = 0.06 - e.flyNow;
+      } else {
+        W.resolveCollision(pos, e.radius);
+        pos.y = gy;
+        if (e.hopT > 0) {                                  // kurbağa sıçrama yayı
+          e.hopT = Math.max(0, e.hopT - dt);
+          const k = 1 - e.hopT / e.hopDur;
+          pos.y += Math.sin(Math.PI * k) * 2.6;
+          if (e.group.userData.blob) e.group.userData.blob.position.y = 0.06 - Math.sin(Math.PI * k) * 2.6;
+        }
+      }
       e.moving = moving > 0;
       e.speed01 = U.lerp(e.speed01, moving, Math.min(1, dt * 8));
       if (!far || (e.t * 10 | 0) % 3 === 0) EV.Creature.animate(e.group, far ? dt * 3 : dt, e.speed01, e.t);
@@ -576,11 +763,18 @@ EV.Enemies = (function () {
       return wander(game, e, dt, smul);
     }
 
+    if (e.behavior === 'treasure') return treasureThink(game, e, dt, smul);
+    if (e.ambushing) return ambushThink(game, e, dt);
+    if (e.behavior === 'healer') healTick(game, e, dt);
+    if (e.behavior === 'summoner') summonTick(game, e, dt);
+    if (e.behavior === 'buffer') buffTick(game, e, dt);
+
     const target = e.ally ? pickAllyTarget(game, e) : pickHostileTarget(game, e);
     if (!target) {
       if (e.ally) return steer(game, e, P.group.position.x, P.group.position.z, e.speed * smul, dt, 4);
       return wander(game, e, dt, smul);
     }
+    if (e.behavior === 'flyer' && target === P) return flyerThink(game, e, dt, smul);
 
     // hedefle aramızdaki yüzeyden yüzeye mesafe
     const tp = target.group.position;
@@ -592,8 +786,15 @@ EV.Enemies = (function () {
     // türe özgü yetenek
     if (!e.ally && target === P && e.def.ability && e.abilityCd <= 0 && EV.Boss.species(game, e, surf)) return false;
 
-    // uzakçı: tercih ettiği mesafeyi korur, çok yaklaşılırsa geri çekilir
-    if (e.behavior === 'ranged' && target === P && surf > e.atk.range) {
+    // bombacı: yanına gelince fitil yakar, patlar
+    if (e.behavior === 'bomber' && target === P && surf < 1.6 && !e.fused) {
+      e.fused = true;
+      EV.Boss.fuse(game, e);
+      return false;
+    }
+
+    // uzakçı / şifacı / çağırıcı: tercih ettiği mesafeyi korur, çok yaklaşılırsa geri çekilir
+    if (KEEP_AWAY[e.behavior] && target === P && surf > e.atk.range) {
       const pref = e.def.range || 12;
       const dx = pos.x - tp.x, dz = pos.z - tp.z, l = Math.hypot(dx, dz) || 1;
       e.group.rotation.y = U.approachAngle(e.group.rotation.y, Math.atan2(-dx, -dz), dt * 8);
@@ -614,6 +815,102 @@ EV.Enemies = (function () {
       return false;
     }
     return steer(game, e, tp.x, tp.z, e.speed * smul, dt, 0.2);
+  }
+
+  /* ---------------- yeni davranışlar ---------------- */
+
+  /** Uçan: hedefin çevresinde yörüngede döner; dalış yeteneği species()'te. */
+  function flyerThink(game, e, dt, smul) {
+    const pos = e.group.position, tp = game.player.group.position;
+    const surf = EV.Creature.surfDist(e.group, tp.x, tp.z) - game.player.radius;
+    if (e.def.ability && e.abilityCd <= 0 && EV.Boss.species(game, e, surf)) return false;
+    const R = e.def.orbit || 7;
+    e.orbitA += e.orbitDir * dt * (e.speed * 0.8) / R;
+    if (Math.random() < dt * 0.15) e.orbitDir = -e.orbitDir;
+    const gx = tp.x + Math.sin(e.orbitA) * R, gz = tp.z + Math.cos(e.orbitA) * R;
+    return steer(game, e, gx, gz, e.speed * smul, dt, 0.6, true);
+  }
+
+  /** Şifacı: çevredeki en yaralı dostları iyileştirir. */
+  function healTick(game, e, dt) {
+    e.healCd -= dt;
+    if (e.healCd > 0) return;
+    const h = e.def.heal;
+    const pos = e.group.position;
+    let n = 0;
+    forEachNear(pos.x, pos.z, h.r, (o) => {
+      if (o.ally || o.peaceful || o === e || o.hp >= o.maxHp) return;
+      o.hp = Math.min(o.maxHp, o.hp + o.maxHp * h.frac);
+      EV.FX.burst(o.group.position.clone().setY(o.group.position.y + o.group.userData.height), 0x7dff8a, 5, 3);
+      n++;
+    });
+    if (n) {
+      EV.FX.ring(pos, 0x7dff8a, h.r, 0.5);
+      EV.Creature.attack(e.group, 0.4);
+    }
+    e.healCd = n ? h.cd : 1;
+  }
+
+  /** Çağırıcı: yavru döker (en fazla summon.max canlı). */
+  function summonTick(game, e, dt) {
+    e.summonCd -= dt;
+    if (e.summonCd > 0) return;
+    const sm = e.def.summon;
+    e.summonCd = sm.cd;
+    if (e.children >= sm.max || (e.aggroT <= 0 && e.group.position.distanceTo(game.player.group.position) > 20)) return;
+    const d = EV.MOBS.find(game.stageIndex, sm.id);
+    if (!d) return;
+    for (let i = 0; i < sm.count && e.children < sm.max; i++) {
+      const c = spawnOne(game, d, e.group.position, { noChamp: true });
+      c.aggroT = 20;
+      c.mother = e;
+      e.children++;
+    }
+    EV.FX.ring(e.group.position, 0xc27bff, 3.5, 0.5);
+    EV.Creature.attack(e.group, 0.5);
+  }
+
+  /** Güçlendirici: sürüsünü (kendisi dahil) azdırır: hız + hasar. */
+  function buffTick(game, e, dt) {
+    e.buffCd -= dt;
+    if (e.buffCd > 0 || e.aggroT <= 0) return;
+    const b = e.def.buff;
+    e.buffCd = b.cd;
+    const pos = e.group.position;
+    forEachNear(pos.x, pos.z, b.r, (o) => {
+      if (o.ally || o.peaceful || o.isAlpha || o.isApex || o.isMini) return;
+      if (o.buffT <= 0) { o.dmg = o.baseDmg * b.dmg; o.speed = o.baseSpeed * b.speed; }
+      o.buffT = b.dur;
+      EV.Creature.flash(o.group);
+    });
+    EV.FX.ring(pos, 0xff5a3d, b.r, 0.6);
+    EV.Creature.attack(e.group, 0.5);
+    U.audio.roar();
+  }
+
+  /** Pusucu: kıpırdamadan bekler; yaklaşan olursa kamuflajı bozup saldırır. */
+  function ambushThink(game, e, dt) {
+    const P = game.player;
+    const d = e.group.position.distanceTo(P.group.position);
+    if (P.alive && (d < 8 || e.aggroT > 0) && !(P.hidden && d > 4)) {
+      e.ambushing = false;
+      camo(e, false);
+      e.aggroT = 15;
+      e.abilityCd = 0;                                    // ilk hamle hemen
+      EV.FX.burst(e.group.position.clone().setY(e.group.position.y + 1), 0x9aa870, 10, 6);
+    }
+    return false;
+  }
+
+  /** Hazine: oyuncudan kaçar, arada yön değiştirir. */
+  function treasureThink(game, e, dt, smul) {
+    const pos = e.group.position, pp = game.player.group.position;
+    const dx = pos.x - pp.x, dz = pos.z - pp.z, l = Math.hypot(dx, dz) || 1;
+    e.zig = (e.zig || 0) - dt;
+    if (e.zig <= 0) { e.zig = U.rand(0.8, 1.6); e.zigA = U.rand(-0.9, 0.9); }
+    const a = Math.atan2(dx, dz) + e.zigA;
+    const run = l < 26 ? 1 : 0.55;
+    return steer(game, e, pos.x + Math.sin(a) * 8, pos.z + Math.cos(a) * 8, e.speed * run * smul, dt);
   }
 
   function resolveAttack(game, e) {
@@ -652,7 +949,7 @@ EV.Enemies = (function () {
 
   return {
     make, despawn, clearAll, seed, maintain, update, spawnPack,
-    spawnAlpha, spawnApex, spawnMini, maintainApex, spawnSummon, onDamaged, steer,
+    spawnAlpha, spawnApex, spawnMini, spawnTreasure, spawnHorde, spawnNemesis, onKilled, spawnOne, maintainApex, CHAMP, spawnSummon, onDamaged, steer,
     forEachNear, nearest, statScale, rebuildGrid,
   };
 })();

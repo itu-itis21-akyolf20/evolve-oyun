@@ -166,8 +166,8 @@ EV.CFG = (function () {
      GENEL AYARLAR
      --------------------------------------------------------- */
   const TUNE = {
-    worldSize: 400,
-    playRadius: 150,       // oynanabilir alan (kenardaki çanak yamacına girilmez)
+    worldSize: 720,
+    playRadius: 245,       // oynanabilir alan (kenardaki çanak yamacına girilmez; yamaç %72'de başlar)
     spawnMin: 20,          // doğum halkası oyuncuya yakın: harita boş görünmesin
     spawnMax: 52,
     despawn: 80,
@@ -203,9 +203,32 @@ EV.CFG = (function () {
     bagSize: 24,
     chestSize: 48,
     dropChance: 0.015,         // sıradan yaratık başına, tier ile çarpılır
-    craftCost: 400,            // Gen Özü — bir aşamada ~2-4 basım (test: 3-4 öz/av)
+    craftCost: 400,            // Gen Özü — bir aşamada ~2-4 üretim (test: 3-4 öz/av)
     upgradeCost: [300, 550, 900, 1500],  // nadirliği bir kademe yükseltme
     salvage: [15, 35, 80, 180, 400],
+
+    /* BASMA (+0 … +9) — nadirlikten ayrı. Dizinin i. elemanı: +i'den +(i+1)'e */
+    plusMax: 9,
+    plusBonus: [0, 0.06, 0.12, 0.19, 0.27, 0.36, 0.46, 0.57, 0.70, 0.85],  // +N'de tüm değerlere birikimli bonus
+    plusChance: [1, 1, 0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4],               // +1 … +9'a çıkma ihtimali
+    plusCost: [40, 70, 110, 160, 230, 320, 440, 600, 800],                // +1 … +9 taban öz bedeli
+    plusRarityMul: [1, 1.2, 1.45, 1.75, 2.1],                             // nadirliğe göre bedel çarpanı
+    plusIlvl: 0.15,            // eşya seviyesi başına bedel artışı
+    plusDropFrom: 6,           // +6 ve üstündeyken başarısızlık bir kademe düşürür
+    plusRefund: 0.25,          // parçalarken basmaya harcananın geri dönen payı
+    setChance: 0.3,            // Değerli+ eşyanın bir takıma ait olma ihtimali
+
+    /* Öldürme ödülleri. ess × (1 + nesil × genEss). drops: her düşüşün en düşük
+       nadirliği (min) ve efsanevi olma ihtimali (leg). announce: büyük duyuru. */
+    genEss: 0.3,
+    champion: { essMul: 4, dropMul: 6, boost: 2 },
+    kill: {
+      apex:     { ess: 150, boost: 6,  announce: true, drops: [{ min: 3, leg: 0.3 }, { min: 2 }] },
+      alpha:    { ess: 60,  boost: 12, drops: [{ min: 3 }] },
+      nemesis:  { ess: 90,  boost: 6,  announce: true, drops: [{ min: 3, leg: 0.35 }] },
+      mini:     { ess: 25,  boost: 4,  drops: [{ min: 2 }] },
+      treasure: { ess: 80,  boost: 3,  announce: true, drops: [{ min: 1 }, { min: 1 }] },
+    },
   };
 
   return { STAGES, ENDLESS, DIFFICULTY, STATUS, REACTIONS, TAGS, TUNE, RARITY, ITEMS };

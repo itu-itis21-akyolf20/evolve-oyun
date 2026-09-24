@@ -91,7 +91,7 @@ EV.Player = (function () {
   const DATA = EV.DATA;
 
   const SLOT_KEYS = ['KeyQ', 'KeyE', 'KeyF'];
-  const GROUND = { zone: 1, leap: 1 };
+  const GROUND = { zone: 1, leap: 1, barrage: 1, totem: 1, blink: 1 };   // isGround() ayrıca base.castRange ister
   const raycaster = new THREE.Raycaster();
   const CENTER = new THREE.Vector2(0, 0);
   const _v = new THREE.Vector3();
@@ -104,7 +104,7 @@ EV.Player = (function () {
       hp: 100, energy: 100, rage: 0, shield: 0, shieldT: 0,
       alive: true, iframe: 0, radius: 1, sizeScale: 1,
       speed01: 0, t: 0, moving: false,
-      yaw: 0, pitch: 0.4, zoom: 1, aimYaw: 0, faceT: 0, fps: loadFps(), autoCast: loadAuto(), autoT: 0,
+      yaw: 0, pitch: 0.4, zoom: 1, aimYaw: 0, faceT: 0, autoCast: loadAuto(), autoT: 0,
       aimPoint: new THREE.Vector3(), hover: null, lockTarget: null,
       stats: null, buffs: [], buffOnHit: [],
       dash: null, leap: null, leapY: 0, hunt: null,
@@ -119,8 +119,9 @@ EV.Player = (function () {
   function rebuild(game) {
     const P = game.player;
     const stage = game.stage();
-    const spec = JSON.parse(JSON.stringify(stage.body));
+    let spec = JSON.parse(JSON.stringify(stage.body));
     spec.extras = EV.Build.extras(game);
+    spec = EV.FORMS.apply(spec, EV.FORMS.get(game.stageIndex, (game.legacy.forms || {})[game.stageIndex]));
     if (game.generation > 0) {
       spec.parts.horns = true;
       spec.scale *= 1 + Math.min(game.generation, 6) * 0.05;
@@ -132,13 +133,13 @@ EV.Player = (function () {
     const pos = old ? old.position.clone() : new THREE.Vector3();
     const rot = old ? old.rotation.y : 0;
     if (old) { game.scene.remove(old); EV.Creature.dispose(old); }
-    P.group = EV.Creature.build(spec);
+    P.group = EV.Creature.build(spec, 'player');
     P.group.position.copy(pos);
     P.group.rotation.y = rot;
     P.bodySpec = spec;
     P.sizeScale = spec.scale;
     P.radius = P.group.userData.radius;
-    if (stage.cam && stage.cam.pitch != null) P.pitch = P.fps ? FPS_PITCH : stage.cam.pitch;
+    if (stage.cam && stage.cam.pitch != null) P.pitch = stage.cam.pitch;
     P.pivot.copy(pos);
     game.scene.add(P.group);
   }
@@ -356,7 +357,7 @@ EV.Player = (function () {
      onu boss / kalabalık için saklar. Atılım için enerji payı bırakılır, gizlenirken
      (saklanma yeri) atılmaz, yetenekler arasında kısa ara verilir. */
   const AUTO_KEY = 'evolve_auto';
-  const AUTO_SKIP = { dash: 1, leap: 1, hunt: 1 };
+  const AUTO_SKIP = { dash: 1, leap: 1, hunt: 1, blink: 1 };
   const AUTO_GAP = 0.35;          // iki otomatik atış arası (sn)
   const AUTO_RESERVE = 15;        // atılım için bırakılan enerji
   function loadAuto() { try { return localStorage.getItem(AUTO_KEY) === '1'; } catch (e) { return false; } }
@@ -381,6 +382,11 @@ EV.Player = (function () {
       case 'orbit': return (p.r || 3) + 2;
       case 'buff': return 10;
       case 'summon': return 16;
+      case 'beam': return (p.range || 16) * 0.85;
+      case 'barrage': return p.castRange || 18;
+      case 'boomerang': return (p.range || 12) * 0.9;
+      case 'totem': return (p.castRange || 12) + (p.mode === 'pulse' ? 0 : (p.r || 0) * 0.5);
+      case 'wave': return (p.range || 12) * 0.8;
       default: return 0;
     }
   }
@@ -455,8 +461,7 @@ EV.Player = (function () {
     /* --- bakış ve yakınlaşma --- */
     if (I.mouse.locked) {
       P.yaw -= I.mouse.dx * 0.0022;
-      P.pitch = P.fps ? U.clamp(P.pitch + I.mouse.dy * 0.0016, -1.1, 1.2)
-        : U.clamp(P.pitch + I.mouse.dy * 0.0016, -0.35, 1.15);
+      P.pitch = U.clamp(P.pitch + I.mouse.dy * 0.0016, -0.35, 1.15);
     }
     if (I.mouse.wheel) P.zoom = U.clamp(P.zoom + I.mouse.wheel * 0.08, 0.6, 1.6);
 
@@ -538,14 +543,12 @@ EV.Player = (function () {
     const aimYawNow = Math.atan2(P.aimPoint.x - P.group.position.x, P.aimPoint.z - P.group.position.z);
     let face = null;
     if (P.faceT > 0) face = P.aimYaw;
-    else if (P.fps) face = P.yaw;
     else if (aimMode || P.aiming) face = aimYawNow;
     else if (P.lockTarget && !P.moving) face = aimYawNow;
     else if (P.moving && !inMotion) face = Math.atan2(P.vel.x, P.vel.z);
     if (face != null) P.group.rotation.y = U.wrapAngle(U.approachAngle(P.group.rotation.y, face, dt * 14));
     if (P.faceT <= 0) P.aimYaw = aimYawNow;
 
-    if (I.hit('KeyV')) toggleFps(game);
     if (I.hit('KeyG')) toggleAuto(game);
 
     /* --- girdiler --- */
@@ -616,43 +619,9 @@ EV.Player = (function () {
      ========================================================= */
   const _fwd = new THREE.Vector3();
   const _cam = new THREE.Vector3();
-  /* ---------------- birinci şahıs (FPS) kamera: V ile aç/kapat ---------------- */
-  const FPS_KEY = 'evolve_fps';
-  const FPS_PITCH = 0.08;
-  function loadFps() { try { return localStorage.getItem(FPS_KEY) === '1'; } catch (e) { return false; } }
-
-  function toggleFps(game) {
-    const P = game.player;
-    P.fps = !P.fps;
-    try { localStorage.setItem(FPS_KEY, P.fps ? '1' : '0'); } catch (e) { /* gizli sekme */ }
-    const c = game.stage().cam;
-    P.pitch = P.fps ? FPS_PITCH : (c && c.pitch != null ? c.pitch : 0.4);
-    P.group.visible = !P.fps;
-    game.toast(P.fps ? '👁️ Birinci şahıs kamera <span class="sub">(V ile geri dön)</span>' : '🎥 Üçüncü şahıs kamera', '#cfe8ff', 1400);
-  }
-
-  /** Göz: gövdenin önü, boyunun ~%80'i. Kendi gövden gizlenir (kameranın içine girmesin). */
-  function fpsCamera(game, camera) {
-    const P = game.player;
-    const pp = P.group.position;
-    const cap = P.group.userData.cap;
-    const fwdOff = (cap.cz + cap.hl + cap.r * 0.4);
-    P.group.visible = false;
-    _cam.set(pp.x + Math.sin(P.yaw) * fwdOff, pp.y + P.group.userData.height * 0.8, pp.z + Math.cos(P.yaw) * fwdOff);
-    const minY = W.height(_cam.x, _cam.z) + 0.35;
-    if (_cam.y < minY) _cam.y = minY;
-    P.pivot.copy(_cam);
-    const cp = Math.cos(P.pitch), sp = Math.sin(P.pitch);
-    _fwd.set(Math.sin(P.yaw) * cp, -sp, Math.cos(P.yaw) * cp);
-    camera.position.copy(_cam);
-    camera.lookAt(_w.copy(_cam).add(_fwd));
-    camera.updateMatrixWorld();
-  }
-
   function updateCamera(game, camera, dt) {
     const P = game.player;
-    if (P.fps && P.alive) return fpsCamera(game, camera);
-    if (!P.group.visible) P.group.visible = true;
+    if (!P.group.visible) P.group.visible = true;     // eski FPS kaydından kalan gizli gövde
     const stage = game.stage();
     const c = stage.cam;
     const s = P.sizeScale;
@@ -679,5 +648,5 @@ EV.Player = (function () {
   /** 0..1 şarj oranı (arayüz için). */
   function charge(game) { const P = game.player; return P && P.charge > 0 ? chargeFrac(P.charge) : -1; }
 
-  return { create, rebuild, update, updateCamera, cycleLock, charge, toggleFps, toggleAuto };
+  return { create, rebuild, update, updateCamera, cycleLock, charge, toggleAuto };
 })();

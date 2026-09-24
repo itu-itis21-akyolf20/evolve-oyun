@@ -1,5 +1,5 @@
 /* ============================================================
-   data/reptile.js — Sürüngen çağı: 11 aktif, 3 ultimate, 9 pasif
+   data/reptile.js — Sürüngen çağı: 16 aktif, 4 ultimate, 11 pasif
    ============================================================ */
 (function () {
   'use strict';
@@ -129,6 +129,63 @@
       ],
     },
 
+    /* ---------------- yeni türler: ışın, bumerang, totem, ışınlanma, dalga ---------------- */
+    {
+      id: 'r_sunray', stage: S, slot: 'active', name: 'Güneş Odağı', icon: '🔆', tags: ['gunes'],
+      kind: 'beam', cost: 22, cd: 7, flavor: 'Güneşi gözlerinde toplayıp ince bir ışına odaklarsın; aynı hedefte kaldıkça ısınır.',
+      base: { dmg: 0.2, tick: 0.25, dur: 2.5, range: 16, width: 0.8, pierce: false, ramp: 0.12, selfSlow: 0.3, turn: 5, st: [['burn', 1]] },
+      ranks: [
+        { txt: 'Süre 3sn', dur: 3 },
+        { txt: 'Isınma her tıkta +%18', ramp: 0.18 },
+        { txt: 'Hasar %26/tık, Yanık 2', dmg: 0.26, st: [['burn', 2]] },
+        { txt: 'Menzil 20m, süre 3.5sn', range: 20, dur: 3.5 },
+      ],
+    },
+    {
+      id: 'r_disc', stage: S, slot: 'active', name: 'Pul Diski', icon: '🥏', tags: ['pul'],
+      kind: 'boomerang', cost: 16, cd: 2.8, flavor: 'Keskin bir pulunu bumerang gibi fırlatırsın; gidişte ve dönüşte keser.',
+      base: { dmg: 1.0, speed: 24, range: 15, size: 0.5, count: 1, spread: 0.45, knock: 3, st: [['bleed', 1]] },
+      ranks: [
+        { txt: 'Hasar %120', dmg: 1.2 },
+        { txt: 'Dönüşte vurduklarını çeker, Kanama 2', pullBack: true, st: [['bleed', 2]] },
+        { txt: 'Menzil 18m', range: 18 },
+        { txt: 'Hasar %140, bekleme 2.4sn', dmg: 1.4, cd: 2.4 },
+      ],
+    },
+    {
+      id: 'r_nest', stage: S, slot: 'active', name: 'Engerek Yuvası', icon: '🪺', tags: ['zehir'],
+      kind: 'totem', cost: 22, cd: 9, flavor: 'Basılı tut, nişan al, bırak: bir yuva kurarsın; yavru engerekler en yakın düşmana zehir tükürür.',
+      base: { mode: 'shot', castRange: 16, r: 12, rate: 1.0, dur: 9, dmg: 0.45, speed: 26, max: 2, height: 1.2, st: [['poison', 1]] },
+      ranks: [
+        { txt: 'Süre 11sn', dur: 11 },
+        { txt: 'Zehir 2, en fazla 3 yuva', st: [['poison', 2]], max: 3 },
+        { txt: 'Tükürük 2m alana patlar', explode: 2 },
+        { txt: 'Tükürme 0.9sn', rate: 0.9 },
+      ],
+    },
+    {
+      id: 'r_dive', stage: S, slot: 'active', name: 'Kum Dalışı', icon: '🕳️', tags: ['kum'],
+      kind: 'blink', cost: 20, cd: 6, flavor: 'Basılı tut, nişan al, bırak: kuma dalar, nişan noktasından fışkırırsın.',
+      base: { castRange: 14, minDist: 4, burrow: true, r: 3.5, dmg: 1.6, dmgStart: 0.6, knock: 8, st: [['slow', 2]] },
+      ranks: [
+        { txt: 'Menzil 17m', castRange: 17 },
+        { txt: 'Hasar %200, sersemletir', dmg: 2.0, st: [['slow', 2], ['stun', 0.5]] },
+        { txt: 'Bekleme 4.5sn', cd: 4.5 },
+        { txt: 'Çıkış alanı 4.5m, hasar %230', r: 4.5, dmg: 2.3 },
+      ],
+    },
+    {
+      id: 'r_quake', stage: S, slot: 'active', name: 'Kuyruk Depremi', icon: '🦖', tags: ['fiziksel'],
+      kind: 'wave', cost: 18, cd: 5, flavor: 'Kuyruğunu yere çarparsın; önüne ilerleyen bir fay hattı yolundakileri sersemletir.',
+      base: { shape: 'line', width: 3, range: 16, speed: 22, height: 0.9, dmg: 1.6, knock: 5, st: [['stun', 0.5], ['slow', 1]] },
+      ranks: [
+        { txt: 'Menzil 19m', range: 19 },
+        { txt: 'Hasar %220', dmg: 2.2 },
+        { txt: 'Genişlik 4.5m, uzun sersemlik', width: 4.5, st: [['stun', 0.8], ['slow', 1]] },
+        { txt: '3 fay hattı (yelpaze)', count: 3, spread: 0.7 },
+      ],
+    },
+
     /* ---------------- ULTIMATE ---------------- */
     {
       id: 'r_u_meteor', stage: S, slot: 'ult', name: 'Meteor Kuyruk', icon: '☄️', tags: ['gunes'],
@@ -163,6 +220,17 @@
         { txt: 'Can çalma %40, hasar %30', mods: { lifesteal: 0.4, atkSpd: 0.75, speed: 0.3, dmg: 0.3 } },
       ],
     },
+    {
+      id: 'r_u_sunrain', stage: S, slot: 'ult', name: 'Güneş Yağmuru', icon: '🌠', tags: ['gunes'],
+      kind: 'barrage', cost: 0, cd: 2, flavor: 'Gökyüzünü tutuşturup nişan aldığın bölgeye kızgın taşlar yağdırırsın.',
+      base: { from: 'sky', castRange: 24, count: 10, r: 7, blast: 3, delay: 0.7, gap: 0.12, dmg: 1.3, size: 0.8, knock: 6, st: [['burn', 2]] },
+      ranks: [
+        { txt: '+2 taş', count: 12 },
+        { txt: 'Hasar %160, sersemletir', dmg: 1.6, st: [['burn', 2], ['stun', 0.5]] },
+        { txt: 'Alan 8m, +3 taş', r: 8, count: 15 },
+        { txt: 'Hasar %190, Yanık 3', dmg: 1.9, st: [['burn', 3], ['stun', 0.5]] },
+      ],
+    },
   ]);
 
   EV.DATA.addPassives([
@@ -175,5 +243,8 @@
     { id: 'p_legs',     stage: S, name: 'Çevik Bacaklar',   icon: '🦵', tags: ['avci'],  max: 5, per: { speed: 0.06, dashCost: -0.08 } },
     { id: 'p_bone',     stage: S, name: 'Keskin Kemik',     icon: '🦴', tags: ['kemik'], max: 5, per: { statusPower: 0.12, statusDur: 0.08 } },
     { id: 'p_opport',   stage: S, name: 'Fırsatçı',         icon: '🐊', tags: ['kum'],   max: 5, per: { ccDmg: 0.1 } },
+    { id: 'p_venomgl',  stage: S, name: 'Zehir Bezleri',    icon: '🧪', tags: ['zehir'], max: 5, per: { statusPower: 0.1, ccDmg: 0.05 } },
+    { id: 'p_sunscale', stage: S, name: 'Güneş Pulları',    icon: '🌅', tags: ['pul'],   max: 5, per: { reflect: 0.05, hpRegen: 0.002 },
+      bonus: [{ at: 5, mods: { armor: 0.1 } }] },
   ]);
 })();

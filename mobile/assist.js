@@ -143,7 +143,7 @@ EV.MobileAssist = (function () {
   let last = performance.now();
   function tick(now) {
     requestAnimationFrame(tick);
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = Math.min(0.1, (now - last) / 1000);        // yavaş telefonda da kamera kilide yetişsin
     last = now;
     const g = game();
     if (!g || !g.started || g.paused || !g.player || !g.player.alive) { arrows.forEach((a) => { a.hidden = true; }); return; }
@@ -168,7 +168,7 @@ EV.MobileAssist = (function () {
     }
 
     // tembel kamera: yürüme yönüne yavaşça dön (sert kilitte ve elle bakarken değil)
-    if (!hard && !manual && !P.fps && P.moving) {
+    if (!hard && !manual && P.moving) {
       const mv = Math.atan2(P.vel.x, P.vel.z);
       const rel = U.wrapAngle(mv - P.yaw);
       const k = Math.min(1, Math.hypot(P.vel.x, P.vel.z) / Math.max(1, P.stats.speed));

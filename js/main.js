@@ -15,7 +15,49 @@ window.EV = window.EV || {};
   const CFG = EV.CFG;
   const T = CFG.TUNE;
   const U = EV.U;
-  const SAVE_KEY = 'evolve_save_v4';   // v4: kart/gen sistemi — eski kayıtlarla uyumsuz
+  const SAVE_KEY = 'evolve_save_v4';
+  const MINI_AT = [0.25, 0.5, 0.75];                  // ara bossların geldiği EVO oranları
+  const DEATH_ANIM = 0.6;                             // ölüm animasyonu (sn)
+  const EVO_INTRO = 1.8;                              // evrim sonrası beden belirme (sn)
+  const EVENTS = [
+    { id: 'horde', w: 4 },                            // Vampire Survivors: sürü dalgası
+    { id: 'moon', w: 2 },                             // Kan Ayı: çok yaratık, çifte ödül
+    { id: 'treasure', w: 3 },                         // Diablo: hazine goblini
+  ];
+
+  const FORM_STAGES = [1, 2];
+  function sanitizeForms(f) {
+    const out = {};
+    if (!f || typeof f !== 'object') return out;
+    FORM_STAGES.forEach((st) => { const id = f[st]; if (typeof id === 'string' && EV.FORMS.get(st, id)) out[st] = id; });
+    return out;
+  }
+
+  /** Kayıttaki kahraman anısı: beden tarifi doğrulanır (bozuk tarif yaratık kurarken çökertmesin). */
+  function sanitizeHero(h) {
+    if (!h || typeof h !== 'object' || !h.spec || typeof h.spec !== 'object') return null;
+    const sp = h.spec;
+    const col = (v, d) => (Number.isFinite(Number(v)) ? U.clamp(Number(v) | 0, 0, 0xffffff) : d);
+    const P = sp.parts && typeof sp.parts === 'object' ? sp.parts : {};
+    const parts = {};
+    ['flagella', 'legs'].forEach((k) => { if (Number.isFinite(Number(P[k]))) parts[k] = U.clamp(Number(P[k]) | 0, 0, 6); });
+    ['cilia', 'spikes', 'fur', 'ears', 'horns', 'fangs', 'wings'].forEach((k) => { if (P[k]) parts[k] = true; });
+    if (['long', 'short', 'bushy', 'none', 'serpent', 'fan'].indexOf(P.tail) >= 0) parts.tail = P.tail;
+    if (['jelly', 'virus', 'colony', 'spiral'].indexOf(P.form) >= 0) parts.form = P.form;
+    if (P.mouth != null) parts.mouth = col(P.mouth, 0xffffff);
+    const spec = {
+      kind: sp.kind === 'cell' ? 'cell' : 'land',
+      scale: U.clamp(Number(sp.scale) || 1, 0.3, 4),
+      body: col(sp.body, 0x888888), accent: col(sp.accent, 0x555555), belly: col(sp.belly, 0xcccccc), eye: col(sp.eye, 0xff3d3d),
+      parts,
+      extras: (Array.isArray(sp.extras) ? sp.extras : []).filter((x) => typeof x === 'string' && x.length < 20).slice(0, 12),
+    };
+    const kinds = (Array.isArray(h.kinds) ? h.kinds : []).filter((k) => typeof k === 'string' && k.length < 12).slice(0, 3);
+    return {
+      spec, kinds, speed: U.clamp(Number(h.speed) || 8, 3, 20), gen: U.clamp(Number(h.gen) | 0, 0, 200),
+      stage: U.clamp(Number(h.stage) | 0, 0, 2), name: String(h.name || 'Geçmiş Benlik').replace(/[<>&"']/g, '').slice(0, 48),
+    };
+  }   // v4: kart/gen sistemi — eski kayıtlarla uyumsuz
 
   const Game = {
     scene: null, camera: null, renderer: null, canvas: null, clock: null, time: 0,
@@ -23,7 +65,8 @@ window.EV = window.EV || {};
     build: null, legacy: null, inv: null, diff: CFG.DIFFICULTY.normal,
     stats: { totalDmg: 0, maxHit: 0 },
     boss: null, bossActive: false, apex: null, apexTimer: 40, pendingStage: false,
-    miniBoss: null, miniDone: false,
+    miniBoss: null, miniCount: 0, miniOrder: [0, 1, 2],
+    nemesis: null, nemesisT: 300, eventT: 150, bloodMoon: 0, evoIntro: 0, evoIntroName: '',
     paused: true, started: false, spawnTimer: 0, foodTimer: 0, hadLock: false,
 
     /* ---------------- aşama bilgisi ---------------- */
@@ -82,9 +125,11 @@ window.EV = window.EV || {};
         const p = atPos.clone(); p.y += 2;
         EV.UI.dmgNumber(p, '+' + U.fmt(evo) + ' EVO', 'evo', this.camera);
       }
-      // ara boss: aşamanın ortasında (EVO %45) bir kez
-      if (!this.miniDone && !this.miniBoss && !this.bossActive && !this.pendingStage && this.evo >= this.evoMax() * 0.45) {
-        EV.Enemies.spawnMini(this);
+      // ara bosslar: EVO %25 / %50 / %75'te birer tane (aşamaya özgü 3 türden)
+      const nextAt = MINI_AT[this.miniCount];
+      if (nextAt != null && !this.miniBoss && !this.bossActive && !this.pendingStage && this.evo >= this.evoMax() * nextAt) {
+        const pool = EV.MOBS.MINIS[this.stageIndex];
+        EV.Enemies.spawnMini(this, pool[this.miniOrder[this.miniCount] % pool.length]);
       }
       if (this.evo >= this.evoMax() && !this.bossActive && !this.pendingStage) {
         EV.Enemies.spawnAlpha(this);
@@ -101,21 +146,40 @@ window.EV = window.EV || {};
       EV.FX.burst(pos.clone().setY(pos.y + 1), (e.def.body && e.def.body.body) || 0xffffff, e.isAlpha ? 36 : 12, e.isAlpha ? 16 : 8);
       U.audio.die();
       if (this.player.lockTarget === e) this.player.lockTarget = null;
+      if (e.mother) e.mother.children = Math.max(0, e.mother.children - 1);
       if (e.ally) return;
+      EV.Enemies.onKilled(this, e);                     // bölünme, patlayan şampiyon
+      if (e.noLoot) return;                             // kendi patlayan bombacı: ödül yok
       this.kills++;
-      EV.Items.onKill(this, e);
+      const rw = EV.Items.onKill(this, e) || {};
+      if (this.bloodMoon > 0 && this.inv) this.inv.essence += (e.def.tier || 1) * 2;   // Kan Ayı: çifte öz
       this.addRage(5);
 
       const scale = (1 + 0.03 * (this.build.level - 1)) * Math.pow(CFG.ENDLESS.evoGrowth, this.generation);
       if (e.isApex) {
         this.apex = null;
         this.apexTimer = U.rand(150, 210) * this.diff.apexTimer;
-        this.gainEvo(Math.round(e.evo * scale), Math.round(EV.Build.xpNeed(this) * 1.5), pos);
-        EV.UI.toast('☠️ ' + e.name.toLocaleUpperCase('tr-TR') + ' DEVRİLDİ', '#ffd83d', 3000);
+        // kaçman gereken avcıyı yenmek: kalıcı Avcı Trofesi (+%4 hasar ve can, en fazla 10)
+        const L = this.legacy;
+        L.trophies = Math.min(10, (L.trophies || 0) + 1);
+        EV.Build.recompute(this);
+        this.gainEvo(Math.round(e.evo * scale), Math.round(EV.Build.xpNeed(this) * 2), pos);
+        EV.UI.toast('☠️ ' + e.name.toLocaleUpperCase('tr-TR') + ' DEVRİLDİ<br><span class="sub">🏆 Avcı Trofesi ' + L.trophies +
+          '/10 — kalıcı +%' + (L.trophies * 4) + ' hasar ve can · +' + U.fmt(rw.essence || 0) + ' 🧬 · Destansı eşya</span>', '#ffd83d', 4200);
+        U.audio.evolve();
+      } else if (e.isNemesis) {
+        this.nemesis = null;
+        this.nemesisT = U.rand(300, 420);
+        this.gainEvo(Math.round(this.evoMax() * 0.08), Math.round(EV.Build.xpNeed(this) * 1.5), pos);
+        EV.UI.toast('👤 GEÇMİŞİNİ YENDİN<br><span class="sub">' + e.name + '</span>', '#c27bff', 3000);
+        U.audio.evolve();
+      } else if (e.isTreasure) {
+        this.gainEvo(Math.round(e.evo * scale), Math.round(EV.Build.xpNeed(this) * 0.6), pos);
+        EV.UI.toast('✨ ' + e.name.toLocaleUpperCase('tr-TR') + ' YAKALANDI', '#ffd23d', 2500);
         U.audio.evolve();
       } else if (e.isMini) {
         this.miniBoss = null;
-        this.miniDone = true;
+        this.miniCount = Math.min(MINI_AT.length, this.miniCount + 1);
         this.gainEvo(Math.round(this.evoMax() * 0.06), Math.round(EV.Build.xpNeed(this) * 1.2), pos);
         EV.UI.toast('⚔️ ' + e.name.toLocaleUpperCase('tr-TR') + ' DEVRİLDİ', '#ffb35a', 2500);
         U.audio.evolve();
@@ -123,7 +187,8 @@ window.EV = window.EV || {};
         this.gainEvo(0, e.xp, null);
         this.onAlphaDefeated(e);
       } else {
-        EV.Pickups.drop(this, pos, Math.round(e.evo * scale), Math.round(e.xp * scale));
+        const moon = this.bloodMoon > 0 ? 2 : 1;
+        EV.Pickups.drop(this, pos, Math.round(e.evo * scale * moon), Math.round(e.xp * scale * moon));
       }
     },
 
@@ -144,6 +209,9 @@ window.EV = window.EV || {};
       EV.UI.updateBoss(this, this.camera);
       const offer = EV.Build.evolveOffer(this);
       const last = this.stageIndex >= CFG.STAGES.length - 1;
+      const nextStage = last ? this.stageIndex : this.stageIndex + 1;
+      offer.forms = EV.FORMS.list(nextStage);
+      offer.formNow = (this.legacy.forms || {})[nextStage] || null;
       const next = last ? null : CFG.STAGES[this.stageIndex + 1];
       U.audio.evolve();
       this.pause();
@@ -154,14 +222,37 @@ window.EV = window.EV || {};
         last ? 'YENİ NESİL — ' + (this.generation + 2) : 'EVRİM: ' + next.name.toLocaleUpperCase('tr-TR'),
         last ? 'Alfa düştü. Yeni bir nesil, daha sert bir dünya. Yetenekler sıfırlanır; genler kalır.'
              : next.intro + '<br><b>Yetenekler ve pasifler sıfırlanır</b> — genler, parçalar ve yankılar seninle gelir.',
-        (geneId) => {
+        (geneId, formId) => {
+          this.rememberHero();
           EV.Build.applyEvolution(this, offer, geneId);
+          const nextStage = last ? this.stageIndex : this.stageIndex + 1;
+          if (formId && EV.FORMS.get(nextStage, formId)) {
+            this.legacy.forms[nextStage] = formId;
+            this.evoIntroName = EV.FORMS.get(nextStage, formId).name;
+          } else this.evoIntroName = '';
           setTimeout(() => EV.Online.submit(this, true), 0);
           if (last) this.generation++; else this.stageIndex++;
           this.evo = 0;
           this.pendingStage = false;
           this.startStage(false);
+          this.evoIntro = EVO_INTRO;                     // yeni beden büyüyerek belirir, kamera döner
+          EV.FX.ring(this.player.group.position, 0xffe08a, 10, 1.0);
+          EV.UI.toast('🧬 EVRİMLEŞTİN' + (this.evoIntroName ? ': ' + this.evoIntroName.toLocaleUpperCase('tr-TR') : ''), '#ffe08a', 2600);
         });
+    },
+
+    /** Şu anki kahramanın anısı: sonraki nesillerde "geçmiş benlik" olarak gelir. */
+    rememberHero() {
+      const P = this.player;
+      if (!P || !P.bodySpec) return;
+      const kinds = this.build.skills.map((s) => { const d = EV.DATA.skill(s.id); return d && d.kind; }).filter(Boolean);
+      const stageName = this.stage().name;
+      const who = EV.Online.name() || 'Kahraman';
+      const L = this.legacy;
+      L.heroes = (L.heroes || []).concat([{
+        spec: JSON.parse(JSON.stringify(P.bodySpec)), kinds, speed: P.stats.speed, gen: this.generation,
+        stage: this.stageIndex, name: who + ' · Nesil ' + (this.generation + 1) + ' ' + stageName,
+      }]).slice(-4);
     },
 
     /** Dünyayı kurar, yapıyı (istenirse) sıfırlar, başlangıç kartını açar. */
@@ -179,7 +270,15 @@ window.EV = window.EV || {};
       this.bossActive = false;
       this.apex = null;
       this.miniBoss = null;
-      if (!keepBuild) this.miniDone = false;
+      this.nemesis = null;
+      this.bloodMoon = 0;
+      this.evoIntro = 0;
+      if (!keepBuild) {
+        this.miniCount = 0;
+        this.miniOrder = [0, 1, 2].sort(() => Math.random() - 0.5);
+      }
+      this.eventT = U.rand(120, 180);
+      this.nemesisT = U.rand(200, 320);
       const ad = EV.MOBS.APEX[Math.min(this.stageIndex, EV.MOBS.APEX.length - 1)];
       this.apexTimer = U.rand(ad.first[0], ad.first[1]) * this.diff.apexTimer;
 
@@ -278,7 +377,7 @@ window.EV = window.EV || {};
       for (let i = this.enemies.length - 1; i >= 0; i--) {
         const e = this.enemies[i];
         if (!e.alive || e.ally) continue;
-        if (e.isAlpha || e.isMini) { e.hp = Math.min(e.maxHp, e.hp + e.maxHp * this.diff.bossHeal); continue; }
+        if (e.isAlpha || e.isMini || e.isNemesis) { e.hp = Math.min(e.maxHp, e.hp + e.maxHp * this.diff.bossHeal); continue; }
         const d = e.group.position.distanceTo(p);
         if (e.isApex && d < 30) {
           EV.Enemies.despawn(this, i);
@@ -317,7 +416,7 @@ window.EV = window.EV || {};
         const data = {
           v: 4, diff: this.diff.id, stageIndex: this.stageIndex, generation: this.generation,
           evo: this.evo, kills: this.kills, legacy: this.legacy, inv: EV.Items.serialize(this.inv),
-          stats: { totalDmg: this.stats.totalDmg, maxHit: this.stats.maxHit }, miniDone: this.miniDone,
+          stats: { totalDmg: this.stats.totalDmg, maxHit: this.stats.maxHit }, miniCount: this.miniCount, miniOrder: this.miniOrder,
           build: { level: b.level, xp: b.xp, skills: b.skills.map((s) => ({ id: s.id, rank: s.rank, fused: !!s.fused })),
             ult: b.ult ? { id: b.ult.id, rank: b.ult.rank } : null, passives: b.passives, rerolls: b.rerolls, uses: b.uses, picks: b.picks,
             history: b.history.slice(-12) },
@@ -346,7 +445,10 @@ window.EV = window.EV || {};
       this.stageIndex = U.clamp(num(d.stageIndex, 0) | 0, 0, CFG.STAGES.length - 1);
       this.generation = U.clamp(num(d.generation, 0) | 0, 0, 200);
       this.kills = Math.max(0, num(d.kills, 0));
-      this.miniDone = !!d.miniDone;
+      // eski kayıt: miniDone (tek ara boss) → ilk ikisi geçilmiş say
+      this.miniCount = d.miniCount != null ? U.clamp(num(d.miniCount, 0) | 0, 0, MINI_AT.length) : (d.miniDone ? 2 : 0);
+      const mo = arr(d.miniOrder).map((x) => x | 0).filter((x) => x >= 0 && x < 3);
+      this.miniOrder = mo.length === 3 ? mo : [0, 1, 2];
       const st = d.stats && typeof d.stats === 'object' ? d.stats : {};
       this.stats = { totalDmg: U.clamp(num(st.totalDmg, 0), 0, 1e15), maxHit: U.clamp(num(st.maxHit, 0), 0, 1e13) };
       const lg = d.legacy || {};
@@ -355,6 +457,9 @@ window.EV = window.EV || {};
         parts: arr(lg.parts).filter((t) => DATA.partFor(t)),
         echoes: arr(lg.echoes).filter((e) => e && DATA.skill(e.id)).map((e) => ({ id: e.id, rank: U.clamp(e.rank | 0, 1, 5), t: 3 })),
         combos: lg.combos && typeof lg.combos === 'object' ? lg.combos : {},
+        trophies: U.clamp(num(lg.trophies, 0) | 0, 0, 10),
+        forms: sanitizeForms(lg.forms),
+        heroes: arr(lg.heroes).map(sanitizeHero).filter(Boolean).slice(-4),
       };
       this.inv = EV.Items.deserialize(d.inv);
       this.build = EV.Build.freshRun(this);
@@ -394,9 +499,59 @@ window.EV = window.EV || {};
       this.startStage(false);
     },
 
-    cleanupDead() {
+    /** Ölenler 0.6 sn devrilip solarak kaybolur (bu sırada hiçbir sistem onları görmez). */
+    cleanupDead(dt) {
       for (let i = this.enemies.length - 1; i >= 0; i--) {
-        if (!this.enemies[i].alive) EV.Enemies.despawn(this, i);
+        const e = this.enemies[i];
+        if (e.alive) continue;
+        e.deadT = (e.deadT || 0) + (dt || 1);
+        if (e.deadT >= DEATH_ANIM || e.ally) { EV.Enemies.despawn(this, i); continue; }
+        if (e.hpBar) e.hpBar.visible = false;
+        EV.Creature.deathPose(e.group, e.deadT / DEATH_ANIM);
+      }
+    },
+
+    /* ---------------- olaylar (sonsuz oyunlardan) ---------------- */
+    updateEvents(dt) {
+      if (this.bloodMoon > 0) {
+        this.bloodMoon -= dt;
+        if (this.bloodMoon <= 0) { document.body.classList.remove('bloodmoon'); this.toast('Kan Ayı battı', '#cfc6b8', 1500); }
+      }
+      if (this.evoIntro > 0) {
+        this.evoIntro = Math.max(0, this.evoIntro - dt);
+        const k = 1 - this.evoIntro / EVO_INTRO;
+        const P = this.player;
+        const s = k < 1 ? 0.25 + 0.75 * (1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2)) : 1;   // easeOutBack
+        P.group.scale.setScalar(Math.max(0.2, s));
+        P.yaw += dt * 2.2 * (1 - k);
+        if (this.evoIntro === 0) P.group.scale.setScalar(1);
+      }
+      const busy = this.bossActive || this.pendingStage || (this.miniBoss && this.miniBoss.alive) || (this.nemesis && this.nemesis.alive);
+      // geçmiş benlik: 2. nesilden itibaren, önceki nesillerin kahramanlarından biri
+      const olds = (this.legacy.heroes || []).filter((h) => h.gen < this.generation);
+      if (olds.length && !busy) {
+        this.nemesisT -= dt;
+        if (this.nemesisT <= 0) {
+          this.nemesisT = U.rand(300, 420);
+          EV.Enemies.spawnNemesis(this, U.pick(olds));
+          return;
+        }
+      }
+      this.eventT -= dt;
+      if (this.eventT > 0) return;
+      if (busy) { this.eventT = 20; return; }
+      this.eventT = U.rand(150, 230) * (this.generation > 0 ? 0.8 : 1);
+      const ev = U.weightedPick(EVENTS, (x) => x.w);
+      if (ev.id === 'horde') {
+        this.toast('🐾 SÜRÜ DALGASI!<br><span class="sub">Her yönden geliyorlar — ortada kalma</span>', '#ff8a5a', 2800);
+        U.audio.roar();
+        EV.Enemies.spawnHorde(this);
+      } else if (ev.id === 'moon') {
+        this.bloodMoon = 60;
+        document.body.classList.add('bloodmoon');
+        this.toast('🌕 KAN AYI — 60 sn<br><span class="sub">Daha çok yaratık, ÇİFTE EVO ve Gen Özü</span>', '#ff5a5a', 3000);
+      } else {
+        EV.Enemies.spawnTreasure(this);
       }
     },
   };
@@ -415,6 +570,7 @@ window.EV = window.EV || {};
     Game.clock = new THREE.Clock();
 
     EV.World.init(Game.scene);
+    EV.GFX.init(Game.renderer, Game.scene, Game.camera, EV.World.sun);
     EV.FX.init(Game.scene);
     EV.Decal.init(Game.scene);
     EV.Skills.init(Game.scene);
@@ -473,6 +629,8 @@ window.EV = window.EV || {};
     window.addEventListener('beforeunload', () => { Game.save(true); EV.Online.beacon(Game); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(true); });
     $('saveCode').textContent = EV.Online.id;
+    $('gfxSel').value = EV.GFX.pref;
+    $('gfxSel').onchange = (ev) => EV.GFX.setPref(ev.target.value);
     $('codeLoad').onclick = async () => {
       const code = window.prompt('Kayıt kodunu gir (diğer bilgisayardaki başlangıç ekranında yazar):');
       if (!code) return;
@@ -571,7 +729,8 @@ window.EV = window.EV || {};
     EV.Pickups.update(g, dt);
     EV.Items.update(g, dt);
     EV.FX.update(dt);
-    g.cleanupDead();
+    g.cleanupDead(dt);
+    g.updateEvents(dt);
 
     EV.UI.updateSkillbar(g);
     EV.UI.updateTarget(g);
@@ -587,7 +746,8 @@ window.EV = window.EV || {};
 
   function loop() {
     requestAnimationFrame(loop);
-    const dt = Math.min(Game.clock.getDelta(), 0.05);
+    const realDt = Game.clock.getDelta();
+    const dt = Math.min(realDt, 0.05);
     try {
       if (Game.started && !Game.paused) {
         Game.time += dt;
@@ -599,6 +759,7 @@ window.EV = window.EV || {};
     } catch (err) {
       console.error('Kare hatası:', err);
     }
+    if (Game.player && Game.player.group) EV.GFX.update(Game.paused ? 0 : dt, realDt, Game.player.group.position);
     Game.renderer.render(Game.scene, Game.camera);
     EV.Input.endFrame();
   }

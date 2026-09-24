@@ -2,6 +2,9 @@
    data/registry.js — yetenek / pasif / füzyon / gen kayıt defteri
    İçerik dosyaları (cell.js, reptile.js …) buraya kayıt olur.
 
+   Yetenek türleri (kind): bolt cone nova zone dash leap chain buff summon
+   orbit trap hunt · beam barrage boomerang totem blink wave (js/skills.js)
+
    Rütbe modeli: def.base = rütbe 1 parametreleri,
    def.ranks[i] = rütbe (i+2)'de geçerli olan MUTLAK değerler.
    Delta değil mutlak değer: dengeyi okumak ve ayarlamak kolay olsun.
@@ -122,6 +125,41 @@ EV.DATA = (function () {
       case 'orbit': bits.push(p.count + ' küre', p.dur + 'sn', dmg); break;
       case 'trap':  bits.push(dmg, 'en fazla ' + p.max + ' tuzak'); break;
       case 'hunt':  bits.push(p.count + ' hedefe atlar', dmg, 'hep kritik'); break;
+      case 'beam':
+        bits.push(U.pct(p.dmg) + '/tık', p.dur + 'sn ışın', p.range + 'm');
+        bits.push(p.pierce ? 'delip geçer' : 'ilk hedefte durur');
+        if (p.ramp) bits.push('aynı hedefte her tık +%' + Math.round(p.ramp * 100));
+        if (p.critEvery) bits.push('her ' + p.critEvery + '. tık kritik');
+        break;
+      case 'barrage':
+        bits.push(p.count + ' × ' + dmg, p.r + 'm alan', p.blast + 'm darbe');
+        if (p.seek) bits.push('avları tek tek hedefler');
+        break;
+      case 'boomerang':
+        bits.push(dmg, (p.radial ? p.count + ' yöne ' : p.count > 1 ? p.count + ' ' : '') + 'bumerang', 'gidişte ve dönüşte vurur');
+        if (p.grow) bits.push('her isabette +%' + Math.round(p.grow * 100) + ' büyür');
+        if (p.pullBack) bits.push('dönüşte çeker');
+        break;
+      case 'totem': {
+        const act = p.mode === 'pulse' ? 'nabız' : p.mode === 'zap' ? 'yıldırım' : 'tükürük';
+        bits.push(dmg + ' ' + act + ' / ' + p.rate + 'sn', p.dur + 'sn', p.r + 'm');
+        if (p.bounces) bits.push(p.bounces + ' sekme');
+        if (p.explode) bits.push(p.explode + 'm patlama');
+        if (p.max > 1) bits.push('en fazla ' + p.max);
+        break;
+      }
+      case 'blink':
+        bits.push((p.castRange || p.dist) + 'm ' + (p.burrow ? 'kum altından' : 'ışınlanma'), dmg, p.r + 'm patlama');
+        if (p.behind) bits.push('hedefin arkasına geçer');
+        if (p.crit) bits.push('hep kritik');
+        if (p.zone) bits.push('ardında ' + p.zone.dur + 'sn asit gölü');
+        break;
+      case 'wave':
+        bits.push(dmg, p.range + 'm menzil', p.shape === 'line' ? p.width + 'm genişlikte duvar' : 'genişleyen yay');
+        if (p.count > 1) bits.push(p.count + ' dalga yelpaze');
+        if (p.waves > 1) bits.push(p.waves + ' art arda');
+        if (p.carry) bits.push('önüne katıp sürükler');
+        break;
       default: break;
     }
     const st = statusText(p.st);

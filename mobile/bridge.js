@@ -20,7 +20,7 @@ EV.MobileBridge = (function () {
 
   const ACTION_KEY = {
     dash: 'Space', skill1: 'KeyQ', skill2: 'KeyE', skill3: 'KeyF', ult: 'KeyR',
-    lock: 'KeyT', bag: 'Tab', build: 'KeyK', menu: 'Escape', view: 'KeyV', auto: 'KeyG',
+    lock: 'KeyT', bag: 'Tab', build: 'KeyK', menu: 'Escape', auto: 'KeyG',
   };
   const MOVE_KEYS = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
   const DEAD = 0.35;                 // çubuğun bu kadarı eğilmeden yön sayılmaz
@@ -83,7 +83,7 @@ EV.MobileBridge = (function () {
     const code = ACTION_KEY[name];
     if (!code) return;
     // anlık eylemler (menü, çanta…) bas-bırak; yetenekler basılı tutulabilir (yer hedefliler için)
-    if (name === 'menu' || name === 'bag' || name === 'build' || name === 'lock' || name === 'view' || name === 'auto') {
+    if (name === 'menu' || name === 'bag' || name === 'build' || name === 'lock' || name === 'auto') {
       if (down) { key(code, true); key(code, false); }
       return;
     }

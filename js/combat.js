@@ -129,6 +129,11 @@ EV.Combat = (function () {
 
     P.hp -= dmg;
     game.lastHitBy = o.attacker ? o.attacker.name : (o.dot ? 'süreli hasar' : (o.by || 'mermi'));
+    const va = o.attacker;
+    if (va && va.alive && va.champ && va.champ.indexOf('vamp') >= 0) {      // vampirik şampiyon vurdukça iyileşir
+      va.hp = Math.min(va.maxHp, va.hp + va.maxHp * 0.05);
+      EV.FX.burst(va.group.position.clone().setY(va.group.position.y + va.group.userData.height), 0xff3d5a, 5, 3);
+    }
     if (!o.dot) P.iframe = T.invuln;
     game.addRage((dmg / S.maxHp) * 80);
 

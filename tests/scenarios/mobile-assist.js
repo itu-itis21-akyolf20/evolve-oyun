@@ -3,6 +3,7 @@
 const wait = async (fn, ms) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) return false; await new Promise((r) => setTimeout(r, 50)); } return true; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 await wait(() => window.EV && EV.Game && EV.MobileAssist && document.getElementById('mTouch'), 15000);
+EV.GFX.setPref('low');
 T.start('normal');
 const G = EV.Game, P = G.player, root = document.getElementById('mTouch');
 const def = EV.MOBS.ENEMIES[0][1];

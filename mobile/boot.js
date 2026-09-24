@@ -46,6 +46,16 @@
 
     // aynı kaynaktan gelen kendi sayfamız; scriptler ayrıca sırayla yüklenir
     const doc = new DOMParser().parseFromString(html, 'text/html');
+    // index.html'deki stil dosyaları (mobile.html'de henüz yoksa) — yeni eklenenler mobilde de gelsin
+    doc.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
+      const href = l.getAttribute('href');
+      if (!document.querySelector('link[href="' + href + '"]')) {
+        const n = document.createElement('link');
+        n.rel = 'stylesheet';
+        n.href = href;
+        document.head.insertBefore(n, document.querySelector('link[href="mobile/mobile.css"]'));
+      }
+    });
     const scripts = Array.from(doc.querySelectorAll('script[src]'), (s) => s.getAttribute('src'));
     doc.querySelectorAll('script').forEach((s) => s.remove());
     document.body.className = (doc.body.className + ' mobile').trim();

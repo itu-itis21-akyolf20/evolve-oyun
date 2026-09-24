@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>EVOLVE — Hücreden Memeliye</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style-extra.css">
 </head>
 <body class="prestart">
 
@@ -92,7 +93,9 @@
       <div class="ev-glow"></div>
       <h2 id="evTitle">EVRİM</h2>
       <p id="evBody"></p>
-      <div class="ev-sec">Kalıcı gen seç — oyun sonuna kadar senin</div>
+      <div id="evFormSec" class="ev-sec" hidden>Bedenini seç — yeni çağda nasıl bir yaratık olacaksın?</div>
+      <div id="evForms"></div>
+      <div class="ev-sec">Kalıcı gen seç — oyun sonuna kadar senin (seçince evrim başlar)</div>
       <div id="evGenes"></div>
       <div class="ev-sec">Bedenine geçenler</div>
       <div id="evCarry"></div>
@@ -110,13 +113,15 @@
 
   <!-- ===================== ÇANTA / SANDIK (Tab) ===================== -->
   <div id="invPanel" class="overlay" hidden>
+    <div id="invMsg" class="invmsg"></div>
     <div class="panel inv">
       <h2>ÇANTA · SANDIK <span class="ess">🧬 <b id="invEss">0</b> Gen Özü</span></h2>
       <div class="invgrid">
         <div class="invcol">
           <h3>KUŞANILAN</h3><div id="invEquip"></div>
-          <h3>EŞYA BAS · <span id="invCraftCost">400</span> öz</h3><div id="invCraft"></div>
-          <div class="hint">Her avlanan yaratık gücü kadar Gen Özü verir.</div>
+          <div id="invSets"></div>
+          <h3>EŞYA ÜRET · <span id="invCraftCost">400</span> öz</h3><div id="invCraft"></div>
+          <div class="hint">Her avlanan yaratık gücü kadar Gen Özü verir. Apex avı büyük ödül verir.</div>
         </div>
         <div class="invcol wide">
           <h3>ÇANTA</h3><div id="invBag" class="igrid"></div>
@@ -166,6 +171,8 @@
         <input id="nameInput" maxlength="16" placeholder="en az 2 karakter" autocomplete="nickname">
         <button id="lbOpen" class="ghost">🏆 Liderlik</button>
       </div>
+      <div class="coderow">🖥️ Grafik:
+        <select id="gfxSel"><option value="auto">Otomatik</option><option value="high">Yüksek</option><option value="med">Orta</option><option value="low">Düşük</option></select></div>
       <div class="coderow">💾 Kayıt kodun: <b id="saveCode">…</b> — başka bilgisayarda devam etmek için sakla
         <button id="codeLoad" class="ghost">Kodla yükle</button></div>
       <div class="diffs">
@@ -177,7 +184,7 @@
         <div><kbd>W A S D</kbd> hareket · <kbd>Fare</kbd> bak/nişan · <kbd>Tekerlek</kbd> yakınlaş</div>
         <div><kbd>Sol Tık</kbd> yakın saldırı · <kbd>Sağ Tık</kbd> basılı + <kbd>Sol Tık</kbd> uzaktan atış (daha zayıf) · <kbd>Boşluk</kbd> atılım</div>
         <div><kbd>Q</kbd> <kbd>E</kbd> <kbd>F</kbd> yetenek · <kbd>R</kbd> ultimate (öfke) · yer hedefliler: basılı tut, bırak (iptal: sağ tık)</div>
-        <div><kbd>T</kbd>/<kbd>Orta tık</kbd> hedef kilitle · <kbd>X</kbd> bırak · <kbd>Tab</kbd> çanta/sandık · <kbd>K</kbd> yapı · <kbd>F</kbd> çiftleş · <kbd>V</kbd> FPS kamera · <kbd>G</kbd> oto yetenek</div>
+        <div><kbd>T</kbd>/<kbd>Orta tık</kbd> hedef kilitle · <kbd>X</kbd> bırak · <kbd>Tab</kbd> çanta/sandık · <kbd>K</kbd> yapı · <kbd>F</kbd> çiftleş · <kbd>G</kbd> oto yetenek</div>
         <div>Uzun otlara / yosunlara / kaya kovuklarına gir: <b>saklan</b>. Sandıklar oralarda.</div>
       </div>
     </div>
@@ -194,6 +201,8 @@
 <script src="js/data/fusions.js"></script>
 <script src="js/data/genes.js"></script>
 <script src="js/data/mobs.js"></script>
+<script src="js/data/forms.js"></script>
+<script src="js/gfx.js"></script>
 <script src="js/world.js"></script>
 <script src="js/creature.js"></script>
 <script src="js/decals.js"></script>

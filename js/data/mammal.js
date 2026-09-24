@@ -1,5 +1,5 @@
 /* ============================================================
-   data/mammal.js — Memeli çağı: 11 aktif, 3 ultimate, 9 pasif
+   data/mammal.js — Memeli çağı: 16 aktif, 4 ultimate, 11 pasif
    Sonsuz nesil modunda da bu havuz kullanılır.
    ============================================================ */
 (function () {
@@ -130,6 +130,63 @@
       ],
     },
 
+    /* ---------------- yeni türler: ışın, yağmur, totem, ışınlanma, dalga ---------------- */
+    {
+      id: 'm_moonbeam', stage: S, slot: 'active', name: 'Ay Hüzmesi', icon: '🌛', tags: ['ay'],
+      kind: 'beam', cost: 22, cd: 7, flavor: 'Gözlerinden soğuk bir ay ışığı akar; deldiği herkesi savunmasız bırakır, her 4. tık kritik.',
+      base: { dmg: 0.28, tick: 0.25, dur: 2.5, range: 18, width: 1.2, pierce: true, critEvery: 4, selfSlow: 0.25, turn: 4.5, st: [['vuln', 1]] },
+      ranks: [
+        { txt: 'Süre 3sn', dur: 3 },
+        { txt: 'Hasar %34/tık', dmg: 0.34 },
+        { txt: 'Her 3. tık kritik', critEvery: 3 },
+        { txt: 'Menzil 22m, genişlik 1.8m, süre 3.5sn', range: 22, width: 1.8, dur: 3.5 },
+      ],
+    },
+    {
+      id: 'm_raid', stage: S, slot: 'active', name: 'Sürü Baskını', icon: '🐕', tags: ['suru'],
+      kind: 'barrage', cost: 20, cd: 6, flavor: 'Basılı tut, nişan al, bırak: hayalet kurtlar bölgedeki avlara tek tek atlar; tek av kalırsa hepsi ona.',
+      base: { from: 'self', seek: true, castRange: 20, r: 6, count: 4, blast: 2, delay: 0.45, gap: 0.12, dmg: 1.1, size: 0.6, knock: 4, st: [['bleed', 1]] },
+      ranks: [
+        { txt: '+1 kurt', count: 5 },
+        { txt: 'Kanama 2', st: [['bleed', 2]] },
+        { txt: 'Hasar %140', dmg: 1.4 },
+        { txt: '+1 kurt, kısa sersemlik', count: 6, st: [['bleed', 2], ['stun', 0.3]] },
+      ],
+    },
+    {
+      id: 'm_totem', stage: S, slot: 'active', name: 'Uluma Totemi', icon: '🗿', tags: ['uluma'],
+      kind: 'totem', cost: 24, cd: 10, flavor: 'Basılı tut, nişan al, bırak: uluyan bir totem dikersin; çevresindekileri korkutup savunmasız bırakır.',
+      base: { mode: 'pulse', castRange: 16, r: 6, rate: 1.2, dur: 8, dmg: 0.6, max: 1, height: 2.2, st: [['fear', 0.6], ['vuln', 1]] },
+      ranks: [
+        { txt: 'Süre 10sn', dur: 10 },
+        { txt: 'Alan 7.5m', r: 7.5 },
+        { txt: 'Hasar %70, korku 1sn', dmg: 0.7, st: [['fear', 1], ['vuln', 1]] },
+        { txt: 'Nabız 1sn, Kırılganlık 2', rate: 1.0, st: [['fear', 1], ['vuln', 2]] },
+      ],
+    },
+    {
+      id: 'm_shadow', stage: S, slot: 'active', name: 'Gölge Pençe', icon: '🌑', tags: ['ay', 'pence'],
+      kind: 'blink', cost: 18, cd: 6, flavor: 'Gölgeye karışıp nişandaki avın arkasında belirirsin; ilk pençe hep kritik.',
+      base: { behind: true, dist: 14, r: 3, dmg: 2.0, crit: true, splash: 0.5, iframe: 0.35, knock: 4, st: [['bleed', 2]] },
+      ranks: [
+        { txt: 'Mesafe 17m', dist: 17 },
+        { txt: 'Hasar %250, Kanama 3', dmg: 2.5, st: [['bleed', 3]] },
+        { txt: 'Bekleme 5sn', cd: 5 },
+        { txt: 'Hasar %260, korkutur (Dehşet)', dmg: 2.6, st: [['bleed', 3], ['fear', 0.8]] },
+      ],
+    },
+    {
+      id: 'm_stampede', stage: S, slot: 'active', name: 'Sürü Hücumu', icon: '🦬', tags: ['suru', 'vahsi'],
+      kind: 'wave', cost: 22, cd: 7, flavor: 'Hayalet bir sürü önünden geçer; yolundakileri çiğneyip önüne katar.',
+      base: { shape: 'line', width: 7, range: 16, speed: 20, height: 1.6, dmg: 1.8, carry: true, knock: 3, st: [['bleed', 1]] },
+      ranks: [
+        { txt: 'Menzil 20m', range: 20 },
+        { txt: 'Hasar %240, sersemletir', dmg: 2.4, st: [['bleed', 1], ['stun', 0.5]] },
+        { txt: 'Genişlik 10m', width: 10 },
+        { txt: 'Kanama 2, bekleme 5.5sn', st: [['bleed', 2], ['stun', 0.5]], cd: 5.5 },
+      ],
+    },
+
     /* ---------------- ULTIMATE ---------------- */
     {
       id: 'm_u_alpha', stage: S, slot: 'ult', name: 'Alfa Kükreyişi', icon: '👑', tags: ['uluma', 'suru'],
@@ -164,6 +221,17 @@
         { txt: 'Hasar %550', dmg: 5.5 },
       ],
     },
+    {
+      id: 'm_u_claws', stage: S, slot: 'ult', name: 'Pençe Kasırgası', icon: '✴️', tags: ['pence', 'vahsi'],
+      kind: 'boomerang', cost: 0, cd: 2, flavor: 'Öfkeyle her yöne hilal pençeler savurursun; hepsi sana geri döner.',
+      base: { dmg: 1.6, radial: true, count: 8, speed: 22, range: 12, size: 0.9, knock: 5, st: [['bleed', 2]] },
+      ranks: [
+        { txt: 'Hasar %190', dmg: 1.9 },
+        { txt: '12 pençe', count: 12 },
+        { txt: 'Kanama 3, korkutur (Dehşet)', st: [['bleed', 3], ['fear', 0.8]] },
+        { txt: 'Menzil 16m, hasar %250', range: 16, dmg: 2.5 },
+      ],
+    },
   ]);
 
   EV.DATA.addPassives([
@@ -177,5 +245,9 @@
     { id: 'p_heart',  stage: S, name: 'Dayanıklı Kalp', icon: '❤️', tags: ['kan'],   max: 5, per: { maxHp: 0.12 } },
     { id: 'p_reflex', stage: S, name: 'Hızlı Refleks',  icon: '⏱️', tags: ['ay'],    max: 5, per: { cdr: 0.06 } },
     { id: 'p_spirit', stage: S, name: 'Avcı Ruhu',      icon: '🔥', tags: ['vahsi'], max: 5, per: { rageGain: 0.15 } },
+    { id: 'p_primal', stage: S, name: 'İlkel İçgüdü',   icon: '🐗', tags: ['vahsi'], max: 5, per: { critDmg: 0.12, speed: 0.03 },
+      bonus: [{ at: 3, mods: { crit: 0.05 } }] },
+    { id: 'p_trail',  stage: S, name: 'Kan İzi',        icon: '👣', tags: ['kan'],   max: 5, per: { vsBleed: 0.08, statusDur: 0.05 },
+      bonus: [{ at: 5, mods: { lifesteal: 0.05 } }] },
   ]);
 })();

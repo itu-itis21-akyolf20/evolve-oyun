@@ -11,6 +11,12 @@
 
    spec.extras: taşınan vücut parçaları (data/genes.js 'visual' alanı).
    İleri yön = +Z.
+
+   Biçimler: hücre parts.form = (yok) | 'jelly' denizanası | 'virus' |
+   'colony' koloni | 'spiral' sarmal bakteri. Kara: legs 0 = yılan,
+   parts.wings = kanatlı (uçanlar). Uçma yüksekliği enemies.js'de.
+   Animasyon: adımda bacak kaldırma, dönüşte yatma, nefes, saldırıdan
+   önce geri çekilme, vurulunca sarsılma, ölüm pozu (deathPose).
    ============================================================ */
 window.EV = window.EV || {};
 
@@ -38,7 +44,7 @@ EV.Creature = (function () {
 
   function makeMats() {
     return {
-      solid: new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 0, specular: 0x000000 }),
+      solid: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.72, metalness: 0.02 }),
       glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
     };
   }
@@ -132,16 +138,52 @@ EV.Creature = (function () {
     root.add(rig);
 
     const R = 1.05 * S;
-    const Y = R * 0.95;
+    const form = p.form || 'blob';
+    const Y = form === 'jelly' ? R * 1.6 : R * 0.95;     // denizanası gövdesi dokunaçların üstünde
     const body = new Parts();
     const head = new Parts();    // hücrede ayrı baş yok; göz/ağız da gövdeye
 
-    ico(body.solid, R * 0.86, 1, spec.belly, 0, Y, 0, 1, 0.74, 1.22);
-    ico(body.solid, R * 0.34, 0, spec.accent, 0, Y, -R * 0.15);
-    body.solid.add(new THREE.TorusGeometry(R * 0.32, R * 0.11, 4, 9), G.xform(0, Y, R * 1.16), p.mouth || spec.eye);
-    [-1, 1].forEach((s) => ico(body.glow, R * 0.15, 0, spec.eye, s * R * 0.38, Y + R * 0.4, R * 0.62));
+    if (form === 'virus') {
+      // köşeli kapsid + ışıklı çekirdek + her yöne diken
+      ico(body.solid, R * 0.82, 0, spec.body, 0, Y, 0);
+      ico(body.glow, R * 0.36, 0, spec.eye, 0, Y, 0);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2, b = (i % 3 - 1) * 0.7;
+        const dx = Math.cos(b) * Math.sin(a), dy = Math.sin(b), dz = Math.cos(b) * Math.cos(a);
+        // koninin +Y ekseni (dx,dy,dz)'ye: XYZ Euler'de rx=atan2(dz,dy), rz=-asin(dx)
+        cone(body.solid, R * 0.1, R * 0.62, 4, spec.accent, dx * R * 1.0, Y + dy * R * 1.0, dz * R * 1.0,
+          Math.atan2(dz, dy), 0, -Math.asin(U.clamp(dx, -1, 1)));
+        ico(body.glow, R * 0.08, 0, spec.eye, dx * R * 1.35, Y + dy * R * 1.35, dz * R * 1.35);
+      }
+    } else if (form === 'colony') {
+      // birbirine yapışık 5 küçük hücre
+      [[0, 0, 0, 0.62], [0.55, 0.1, 0.25, 0.46], [-0.55, 0.05, 0.2, 0.48], [0.2, 0.15, -0.55, 0.44], [-0.25, 0.3, -0.35, 0.4]].forEach(([x, y, z, r], i) => {
+        ico(body.solid, R * r, 1, i % 2 ? spec.belly : spec.body, x * R, Y + y * R, z * R);
+        ico(body.glow, R * r * 0.24, 0, spec.eye, x * R + R * r * 0.35, Y + y * R + R * r * 0.45, z * R + R * r * 0.6);
+      });
+    } else if (form === 'spiral') {
+      // sarmal zincir
+      for (let i = 0; i < 7; i++) {
+        const t = i / 6;
+        ico(body.solid, R * (0.36 - t * 0.12), 0, i % 2 ? spec.accent : spec.body,
+          Math.sin(t * Math.PI * 3) * R * 0.35, Y + Math.cos(t * Math.PI * 3) * R * 0.25, (0.5 - t) * R * 2.6);
+      }
+      [-1, 1].forEach((s) => ico(body.glow, R * 0.1, 0, spec.eye, s * R * 0.16, Y + R * 0.2, R * 1.45));
+    } else if (form === 'jelly') {
+      // çan biçimli şemsiye; alt kenarda ışıklı noktalar
+      ico(body.solid, R * 0.55, 0, spec.accent, 0, Y - R * 0.05, 0);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        ico(body.glow, R * 0.09, 0, spec.eye, Math.sin(a) * R * 0.92, Y - R * 0.32, Math.cos(a) * R * 0.92);
+      }
+    } else {
+      ico(body.solid, R * 0.86, 1, spec.belly, 0, Y, 0, 1, 0.74, 1.22);
+      ico(body.solid, R * 0.34, 0, spec.accent, 0, Y, -R * 0.15);
+      body.solid.add(new THREE.TorusGeometry(R * 0.32, R * 0.11, 4, 9), G.xform(0, Y, R * 1.16), p.mouth || spec.eye);
+      [-1, 1].forEach((s) => ico(body.glow, R * 0.15, 0, spec.eye, s * R * 0.38, Y + R * 0.4, R * 0.62));
+    }
 
-    if (p.cilia) {
+    if (p.cilia && form === 'blob') {
       for (let i = 0; i < 14; i++) {
         const a = (i / 14) * Math.PI * 2;
         box(body.solid, 0.07 * S, 0.07 * S, R * 0.5, spec.accent,
@@ -161,16 +203,46 @@ EV.Creature = (function () {
     bake(rig, body, mats);
     bake(rig, head, mats);
 
-    // saydam zar ayrı mesh (tek saydam materyal)
-    const membrane = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(R, 1),
-      new THREE.MeshPhongMaterial({ color: spec.body, flatShading: true, transparent: true, opacity: 0.55, shininess: 0, specular: 0x000000 })
-    );
-    membrane.scale.set(1, 0.78, 1.26);
-    membrane.position.y = Y;
-    rig.add(membrane);
+    // saydam zar ayrı mesh (tek saydam materyal); virüs/koloni/sarmalda zar yok
+    let membrane = null;
+    if (form === 'blob' || form === 'jelly') {
+      membrane = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(R, 1),
+        new THREE.MeshPhongMaterial({ color: spec.body, flatShading: true, transparent: true, opacity: 0.55, shininess: 70, specular: 0x557777 })
+      );
+      if (form === 'jelly') membrane.scale.set(1.05, 0.62, 1.05);
+      else membrane.scale.set(1, 0.78, 1.26);
+      membrane.position.y = Y;
+      rig.add(membrane);
+    }
+    membrane && (membrane.userData.base = membrane.scale.clone());
+
+    // denizanası dokunaçları (hitbox'a dahil değil)
+    const tentacles = [];
+    if (form === 'jelly') {
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        const g = new THREE.Group();
+        g.position.set(Math.sin(a) * R * 0.6, Y - R * 0.35, Math.cos(a) * R * 0.6);
+        rig.add(g);
+        let parent = g;
+        const segs = [];
+        for (let i = 0; i < 4; i++) {
+          const seg = new THREE.Group();
+          seg.position.y = i ? -0.34 * S : 0;
+          parent.add(seg);
+          const tp = new Parts();
+          box(tp.solid, 0.08 * S, 0.34 * S, 0.08 * S, k % 2 ? spec.accent : spec.body, 0, -0.17 * S, 0);
+          bake(seg, tp, mats);
+          segs.push(seg);
+          parent = seg;
+        }
+        tentacles.push({ segs, phase: k * 1.1 });
+      }
+    }
 
     const cap = measure(root);
+    if (form === 'jelly') cap.top = Y + R * 0.7;
 
     /* --- kamçılar (hitbox'a dahil değil) --- */
     let tail = null;
@@ -199,11 +271,11 @@ EV.Creature = (function () {
     }
     if (tail) tail.userData.segments = segs;
 
-    addBlob(root, R * 1.1);
+    const blob = addBlob(root, R * 1.1);
     root.userData = {
-      rig, neck: null, legs: [], tail, mats, membrane,
+      rig, neck: null, legs: [], tail, mats, membrane, blob, tentacles, wings: [], form,
       hipY: Y, height: Y + R * 0.8, scale: S, cap,
-      radius: cap.r, flash: 0, atk: 0, atkDur: 0.3, isCell: true,
+      radius: cap.r, flash: 0, atk: 0, atkDur: 0.3, isCell: true, hurt: 0, lean: 0, prevYaw: null,
     };
     return root;
   }
@@ -222,9 +294,10 @@ EV.Creature = (function () {
     const bodyCol = has(spec, 'silver') ? lighten(spec.body, 0.18) : spec.body;
     const isBiped = p.legs === 2;
     const isBug = p.legs === 6;
-    const legLen = (isBiped ? 1.5 : 1.0) * S;
-    const hipY = legLen + 0.45 * S;
-    const W = 1.15 * S, H = 1.0 * S, D = 2.0 * S;
+    const isSnake = p.legs === 0;
+    const legLen = (isBiped ? 1.5 : isSnake ? 0 : 1.0) * S;
+    const hipY = isSnake ? 0.42 * S : legLen + 0.45 * S;
+    const W = (isSnake ? 0.7 : 1.15) * S, H = (isSnake ? 0.62 : 1.0) * S, D = (isSnake ? 1.5 : 2.0) * S;
 
     /* --- gövde --- */
     const body = new Parts();
@@ -287,14 +360,36 @@ EV.Creature = (function () {
       if (claws) [-1, 0, 1].forEach((c) => cone(lp.solid, 0.05 * S, 0.22 * S, 4, 0xf4efe0, c * 0.1 * S, -legLen * 0.72, 0.38 * S, 1.5, 0, 0));
       bake(pivot, lp, mats);
       pivot.userData.phase = phase;
+      pivot.userData.baseY = pivot.position.y;
       legs.push(pivot);
     }
     const hx = W * 0.52;
-    if (isBiped) { leg(-hx, -0.1 * S, 0); leg(hx, -0.1 * S, Math.PI); }
+    if (isSnake) { /* bacak yok */ }
+    else if (isBiped) { leg(-hx, -0.1 * S, 0); leg(hx, -0.1 * S, Math.PI); }
     else if (isBug) {
       for (let i = 0; i < 3; i++) { const z = (i - 1) * D * 0.32; leg(-hx, z, i * 1.05); leg(hx, z, i * 1.05 + Math.PI); }
     } else {
       leg(-hx, D * 0.3, 0); leg(hx, D * 0.3, Math.PI); leg(-hx, -D * 0.3, Math.PI); leg(hx, -D * 0.3, 0);
+    }
+
+    /* --- kanatlar (uçanlar): omuzda pivot, çırpma animate() içinde --- */
+    const wings = [];
+    if (p.wings) {
+      const span = (p.wingSpan || 2.0) * S;
+      [-1, 1].forEach((s) => {
+        const wp = new THREE.Group();
+        wp.position.set(s * W * 0.45, hipY + H * 0.35, D * 0.08);
+        rig.add(wp);
+        const wg = new Parts();
+        // geniş zar: iç kısım gövde renginde, uç kısım daralan açık renk
+        box(wg.solid, span * 0.55, 0.08 * S, 1.35 * S, spec.accent, s * span * 0.3, 0, -0.1 * S);
+        box(wg.solid, span * 0.5, 0.07 * S, 0.95 * S, lighten(spec.accent, 0.08), s * span * 0.75, 0, -0.2 * S, 0, s * 0.12, 0);
+        box(wg.solid, span * 0.55, 0.09 * S, 0.45 * S, bodyCol, s * span * 0.28, 0.02 * S, 0.45 * S);
+        for (let i = 0; i < 3; i++) box(wg.solid, 0.08 * S, 0.08 * S, 1.0 * S, spec.belly, s * span * (0.35 + i * 0.25), 0.04 * S, -0.05 * S, 0, s * 0.25 * i, 0);
+        bake(wp, wg, mats);
+        wp.userData.side = s;
+        wings.push(wp);
+      });
     }
 
     const cap = measure(root);
@@ -306,7 +401,8 @@ EV.Creature = (function () {
       tail.position.set(0, hipY - 0.05 * S, -D * 0.5);
       rig.add(tail);
       const cfg = { long: { n: 4, len: 0.62, taper: 0.8, w: 0.5 }, short: { n: 2, len: 0.34, taper: 0.75, w: 0.42 },
-        bushy: { n: 3, len: 0.52, taper: 0.94, w: 0.62 } }[p.tail] || { n: 3, len: 0.5, taper: 0.85, w: 0.5 };
+        bushy: { n: 3, len: 0.52, taper: 0.94, w: 0.62 }, serpent: { n: 7, len: 0.55, taper: 0.88, w: 0.62 },
+        fan: { n: 2, len: 0.5, taper: 1.3, w: 0.5 } }[p.tail] || { n: 3, len: 0.5, taper: 0.85, w: 0.5 };
       let parent = tail, w = cfg.w * S, z = 0;
       const segs = [];
       const tuft = has(spec, 'tuft');
@@ -328,11 +424,11 @@ EV.Creature = (function () {
       tail.userData.segments = segs;
     }
 
-    addBlob(root, D * 0.55);
+    const blob = addBlob(root, D * 0.55);
     root.userData = {
-      rig, neck, legs, tail, mats, membrane: null,
+      rig, neck, legs, tail, mats, membrane: null, blob, tentacles: [], wings, isSnake,
       hipY, height: hipY + H, scale: S, cap,
-      radius: cap.r, flash: 0, atk: 0, atkDur: 0.3, isCell: false,
+      radius: cap.r, flash: 0, atk: 0, atkDur: 0.3, isCell: false, hurt: 0, lean: 0, prevYaw: null,
     };
     return root;
   }
@@ -355,50 +451,107 @@ EV.Creature = (function () {
     const blob = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false }));
     blob.position.y = 0.06;
     root.add(blob);
+    return blob;
   }
 
-  function build(spec) {
-    return spec.kind === 'cell' ? buildCell(spec) : buildLand(spec);
+  /** kind: 'player' | 'boss' | 'creature' — gölge atma kararı gfx.js'te (kaliteye göre). */
+  function build(spec, kind) {
+    const root = spec.kind === 'cell' ? buildCell(spec) : buildLand(spec);
+    const k = kind || 'creature';
+    const cast = EV.GFX ? EV.GFX.castFor(k) : false;
+    root.traverse((o) => {
+      if (!o.isMesh || o === root.userData.blob || (o.material && o.material.transparent)) return;
+      o.castShadow = cast;
+      o.userData.shadowCast = k;
+    });
+    if (cast && root.userData.blob) root.userData.blob.material.opacity = 0.1;   // gerçek gölge var
+    return root;
   }
 
   /* =========================================================
      Animasyon
      ========================================================= */
+  /** Saldırı eğrisi: ilk %30 geri çekilme (hazırlık), sonra ileri atılma. */
+  function attackCurve(d) {
+    if (d.atk <= 0) return 0;
+    const p = 1 - d.atk;
+    return p < 0.3 ? -0.45 * (p / 0.3) : Math.sin(Math.PI * (p - 0.3) / 0.7);
+  }
+
   function animate(root, dt, speed01, time) {
     const d = root.userData;
     if (!d || !d.rig) return;
     const amp = 0.18 + speed01 * 0.72;
     const rate = 5 + speed01 * 9;
+    const S = d.scale;
 
+    // dönüş hızı → gövde içe yatar, kuyruk dışa savrulur
+    const yaw = root.rotation.y;
+    let turn = 0;
+    if (d.prevYaw != null && dt > 0) turn = U.clamp(U.wrapAngle(yaw - d.prevYaw) / dt, -6, 6);
+    d.prevYaw = yaw;
+    d.lean = U.lerp(d.lean, -turn * 0.045 * (0.3 + speed01), Math.min(1, dt * 8));
+
+    // adım: bacak öne-arkaya + havadayken kalkar (uçarken bacaklar toplanır)
+    const flying = !!d.flying;
     for (let i = 0; i < d.legs.length; i++) {
-      d.legs[i].rotation.x = Math.sin(time * rate + d.legs[i].userData.phase) * amp;
+      const L = d.legs[i];
+      if (flying) { L.rotation.x = U.lerp(L.rotation.x, 0.9, Math.min(1, dt * 6)); L.position.y = L.userData.baseY; continue; }
+      const ph = time * rate + L.userData.phase;
+      L.rotation.x = Math.sin(ph) * amp;
+      L.position.y = L.userData.baseY + Math.max(0, Math.cos(ph)) * 0.14 * S * speed01;
     }
 
-    let thrust = 0;
-    if (d.atk > 0) {
-      d.atk = Math.max(0, d.atk - dt / d.atkDur);
-      thrust = Math.sin(Math.PI * (1 - d.atk));
-    }
+    if (d.atk > 0) d.atk = Math.max(0, d.atk - dt / d.atkDur);
+    const thrust = attackCurve(d);
+    if (d.hurt > 0) d.hurt = Math.max(0, d.hurt - dt * 5);
+    const recoil = d.hurt * d.hurt;
 
     if (d.isCell) {
-      d.rig.position.y = Math.sin(time * 1.7) * 0.11 * d.scale;
-      d.rig.position.z = thrust * 0.45 * d.scale;
-      d.rig.rotation.z = Math.sin(time * 1.1) * 0.07;
-      d.rig.rotation.x = Math.sin(time * 1.4 + 0.6) * 0.05 + speed01 * 0.12;
+      const breathe = 1 + Math.sin(time * 2.6) * 0.045;
+      d.rig.position.y = Math.sin(time * 1.7) * 0.11 * S;
+      d.rig.position.z = thrust * 0.45 * S - recoil * 0.25 * S;
+      d.rig.rotation.z = Math.sin(time * 1.1) * 0.07 + d.lean;
+      d.rig.rotation.x = Math.sin(time * 1.4 + 0.6) * 0.05 + speed01 * 0.12 - recoil * 0.2;
+      if (d.form === 'virus' || d.form === 'colony') d.rig.rotation.y += dt * (d.form === 'virus' ? 1.6 : 0.5);
+      if (d.form === 'spiral') d.rig.rotation.z = Math.sin(time * 6) * 0.25;
       if (d.membrane) {
-        const pulse = 1 + Math.sin(time * 2.6) * 0.045;
-        d.membrane.scale.set(pulse * (1 - thrust * 0.12), 0.78 * pulse, 1.26 * pulse * (1 + thrust * 0.25));
+        const b = d.membrane.userData.base;
+        if (d.form === 'jelly') {
+          const pump = 1 + Math.sin(time * 3.2) * 0.1;             // şemsiye kasılır/gevşer
+          d.membrane.scale.set(b.x * pump, b.y * (2 - pump), b.z * pump);
+          d.rig.position.y = Math.sin(time * 3.2 - 0.8) * 0.2 * S;
+        } else {
+          d.membrane.scale.set(b.x * breathe * (1 - thrust * 0.12), b.y * breathe, b.z * breathe * (1 + thrust * 0.25));
+        }
+      }
+      for (let k = 0; k < d.tentacles.length; k++) {
+        const t = d.tentacles[k];
+        for (let i = 0; i < t.segs.length; i++) {
+          t.segs[i].rotation.x = Math.sin(time * 2.4 + t.phase - i * 0.7) * 0.28 + speed01 * 0.35;
+          t.segs[i].rotation.z = Math.cos(time * 1.9 + t.phase - i * 0.6) * 0.2;
+        }
       }
     } else {
-      d.rig.position.y = Math.abs(Math.sin(time * rate)) * 0.09 * speed01 * d.scale;
-      d.rig.position.z = thrust * 0.35 * d.scale;
-      d.rig.rotation.z = Math.sin(time * rate * 0.5) * 0.05 * speed01;
-      d.rig.rotation.x = thrust * 0.12;
+      const breathe = 1 + Math.sin(time * 2.1) * 0.022 * (1 - speed01);
+      d.rig.scale.set(1, breathe, 1);
+      d.rig.position.y = (flying ? Math.sin(time * 4) * 0.12 * S : Math.abs(Math.sin(time * rate)) * 0.1 * speed01 * S);
+      d.rig.position.z = thrust * 0.35 * S - recoil * 0.3 * S;
+      d.rig.rotation.z = Math.sin(time * rate * 0.5) * 0.05 * speed01 + d.lean;
+      d.rig.rotation.x = thrust * 0.12 - recoil * 0.25 + (flying ? 0.12 * speed01 : 0);
+      if (d.isSnake) d.rig.rotation.y = Math.sin(time * (3 + speed01 * 5)) * 0.14 * (0.3 + speed01);
+    }
+
+    for (let i = 0; i < d.wings.length; i++) {
+      const w = d.wings[i], s = w.userData.side;
+      const flap = flying ? Math.sin(time * (9 + speed01 * 5)) * 0.75 : -0.2 + Math.sin(time * 1.5) * 0.05;
+      w.rotation.z = s * (flying ? flap : 1.1 + flap);                // yerdeyken kanatlar katlanır
+      w.rotation.x = flying ? Math.cos(time * 9) * 0.1 : 0;
     }
 
     if (d.neck) {
-      d.neck.rotation.x = Math.sin(time * rate * 0.5 + 1) * 0.09 * (0.3 + speed01) + thrust * 0.55;
-      d.neck.rotation.y = Math.sin(time * 1.3) * 0.06;
+      d.neck.rotation.x = Math.sin(time * rate * 0.5 + 1) * 0.09 * (0.3 + speed01) + thrust * 0.55 - recoil * 0.3;
+      d.neck.rotation.y = Math.sin(time * 1.3) * 0.06 + d.lean * 0.8;
     }
 
     if (d.tail && d.tail.userData.segments) {
@@ -409,21 +562,50 @@ EV.Creature = (function () {
           segs[i].rotation.y = Math.sin(time * w - i * 0.9) * a;
           segs[i].rotation.x = Math.cos(time * w * 0.7 - i * 0.7) * a * 0.45;
         }
+      } else if (d.isSnake) {
+        const w = 3 + speed01 * 6, a = 0.22 + speed01 * 0.18;     // yılan kıvrımı gövde boyunca akar
+        for (let i = 0; i < segs.length; i++) segs[i].rotation.y = Math.sin(time * w - i * 0.85) * a - d.lean * 0.3;
       } else {
         for (let i = 0; i < segs.length; i++) {
-          segs[i].rotation.y = Math.sin(time * (2.2 + speed01 * 4) - i * 0.6) * (0.12 + speed01 * 0.14);
-          segs[i].rotation.x = Math.sin(time * 1.6 - i * 0.4) * 0.05;
+          segs[i].rotation.y = Math.sin(time * (2.2 + speed01 * 4) - i * 0.6) * (0.12 + speed01 * 0.14) - d.lean * 0.6;
+          segs[i].rotation.x = Math.sin(time * 1.6 - i * 0.4) * 0.05 + thrust * 0.12;
         }
       }
     }
 
-    if (d.flash > 0) {
+    if (d.flash > 0 || d.glow) {
       d.flash = Math.max(0, d.flash - dt * 4);
-      d.mats.solid.emissive.setRGB(d.flash * 0.9, d.flash * 0.12, d.flash * 0.12);
+      const g = d.glow || ZERO;
+      d.mats.solid.emissive.setRGB(g.r + d.flash * 0.9, g.g + d.flash * 0.12, g.b + d.flash * 0.12);
     }
   }
+  const ZERO = { r: 0, g: 0, b: 0 };
 
-  function flash(root) { if (root.userData) root.userData.flash = 1; }
+  /** Vuruş parlaması + sarsılma. */
+  function flash(root) { if (root.userData) { root.userData.flash = 1; root.userData.hurt = 1; } }
+
+  /** Kalıcı ışıma (şampiyon, geçmiş benlik…): {r,g,b} 0..1 ya da null. */
+  function setGlow(root, rgb) { if (root.userData) root.userData.glow = rgb; }
+
+  /** Ölüm pozu k: 0→1 — yana devrilir, batar, solar. */
+  function deathPose(root, k) {
+    const d = root.userData;
+    if (!d || !d.rig) return;
+    if (!d.dying) {
+      d.dying = { side: Math.random() < 0.5 ? -1 : 1 };
+      root.traverse((o) => { if (o.material && !o.isSprite) { o.material.transparent = true; o.material.depthWrite = k < 0.5; } });
+    }
+    const e = k * k;
+    d.rig.rotation.z = d.dying.side * e * (d.isCell ? 0.6 : 1.45);
+    d.rig.position.y = -e * 0.6 * d.scale;
+    const s = d.isCell ? 1 - e * 0.5 : 1;
+    d.rig.scale.set(s, s, s);
+    root.traverse((o) => {
+      if (!o.material || o.isSprite) return;
+      if (o.userData.op0 == null) o.userData.op0 = o.material.opacity;
+      o.material.opacity = o.userData.op0 * (1 - k);
+    });
+  }
 
   /** Saldırı animasyonu: baş öne-aşağı dalar, gövde ileri atılır. */
   function attack(root, dur) {
@@ -477,5 +659,5 @@ EV.Creature = (function () {
     });
   }
 
-  return { build, animate, flash, attack, capsule, surfDist, closestPoint, dispose };
+  return { build, animate, flash, setGlow, deathPose, attack, capsule, surfDist, closestPoint, dispose };
 })();

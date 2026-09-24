@@ -1,5 +1,5 @@
 /* ============================================================
-   data/cell.js — Hücre çağı: 11 aktif, 3 ultimate, 9 pasif
+   data/cell.js — Hücre çağı: 16 aktif, 4 ultimate, 11 pasif
    dmg = oyuncunun hasar değerinin katı. st = [[durum, yük|sn]]
    ============================================================ */
 (function () {
@@ -130,6 +130,64 @@
       ],
     },
 
+    /* ---------------- yeni türler: totem, yağmur, bumerang, dalga, ışınlanma ---------------- */
+    {
+      id: 'c_colony', stage: S, slot: 'active', name: 'Elektrik Kolonisi', icon: '🪸', tags: ['elektrik'],
+      kind: 'totem', cost: 22, cd: 8, flavor: 'Basılı tut, nişan al, bırak: bir koloni dikersin; en yakın düşmanı durmadan çarpar.',
+      base: { mode: 'zap', castRange: 18, r: 9, rate: 0.9, dur: 8, dmg: 0.55, max: 2, st: [['shock', 1]] },
+      ranks: [
+        { txt: 'Yıldırım +1 hedefe seker', bounces: 1 },
+        { txt: 'Süre 10sn', dur: 10 },
+        { txt: 'Hasar %70', dmg: 0.7 },
+        { txt: 'Çarpma 0.75sn, +1 sekme, en fazla 3 koloni', rate: 0.75, bounces: 2, max: 3 },
+      ],
+    },
+    {
+      id: 'c_spores', stage: S, slot: 'active', name: 'Spor Yağmuru', icon: '🍄', tags: ['zehir'],
+      kind: 'barrage', cost: 20, cd: 4.5, flavor: 'Basılı tut, nişan al, bırak: sporların kavis çizip bölgeye yağar.',
+      base: { from: 'self', castRange: 20, count: 5, r: 3.5, blast: 2, delay: 0.6, gap: 0.1, dmg: 0.7, size: 0.4, knock: 2, st: [['poison', 1]] },
+      ranks: [
+        { txt: 'Alan 4.2m', r: 4.2 },
+        { txt: 'Zehir 2', st: [['poison', 2]] },
+        { txt: '+2 spor', count: 7 },
+        { txt: 'Hasar %80, Kırılganlık', dmg: 0.8, st: [['poison', 2], ['vuln', 1]] },
+      ],
+    },
+    {
+      id: 'c_capsid', stage: S, slot: 'active', name: 'Virüs Kapsidi', icon: '🦠', tags: ['zehir', 'bolunme'],
+      kind: 'boomerang', cost: 16, cd: 2.6, flavor: 'Dönen bir virüs kapsidi fırlatırsın; geri döner, her isabette çoğalıp büyür.',
+      base: { dmg: 0.9, speed: 20, range: 13, size: 0.55, count: 1, spread: 0.4, grow: 0.12, knock: 2, st: [['poison', 1]] },
+      ranks: [
+        { txt: 'Hasar %110', dmg: 1.1 },
+        { txt: 'Menzil 16m, isabette %18 büyür', range: 16, grow: 0.18 },
+        { txt: 'Bekleme 2.2sn', cd: 2.2 },
+        { txt: 'Hasar %135, Kırılganlık', dmg: 1.35, st: [['poison', 1], ['vuln', 1]] },
+      ],
+    },
+    {
+      id: 'c_osmo', stage: S, slot: 'active', name: 'Ozmotik Dalga', icon: '🌊', tags: ['zar'],
+      kind: 'wave', cost: 18, cd: 5.5, flavor: 'Zarından bir basınç dalgası salarsın; önündekileri katıp uzağa sürükler.',
+      base: { shape: 'arc', arc: 1.7, range: 11, speed: 16, dmg: 1.4, carry: true, knock: 3, st: [['slow', 1]] },
+      ranks: [
+        { txt: 'Menzil 13m', range: 13 },
+        { txt: 'Hasar %180, Yavaşlama 2', dmg: 1.8, st: [['slow', 2]] },
+        { txt: 'Bekleme 4.5sn', cd: 4.5 },
+        { txt: 'Geniş yay, hasar %200', arc: 2.4, dmg: 2.0 },
+      ],
+    },
+    {
+      id: 'c_flow', stage: S, slot: 'active', name: 'Sitoplazma Akışı', icon: '💧', tags: ['asit'],
+      kind: 'blink', cost: 18, cd: 5, flavor: 'Basılı tut, nişan al, bırak: nişana akarsın; ardında bir asit gölü kalır.',
+      base: { castRange: 11, minDist: 3, r: 3, dmg: 1.3, iframe: 0.3, knock: 5, st: [['vuln', 1]],
+        zone: { r: 2.8, dur: 3, dmg: 0.25, st: [['vuln', 1]] } },
+      ranks: [
+        { txt: 'Mesafe 14m', castRange: 14 },
+        { txt: 'Hasar %170, varışta yavaşlatır', dmg: 1.7, st: [['vuln', 1], ['slow', 1]] },
+        { txt: 'Bekleme 3.5sn', cd: 3.5 },
+        { txt: 'Asit gölü 3.5sn ve %30/tık', zone: { r: 3.4, dur: 3.5, dmg: 0.3, st: [['vuln', 1]] } },
+      ],
+    },
+
     /* ---------------- ULTIMATE (Öfke) ---------------- */
     {
       id: 'c_u_mitosis', stage: S, slot: 'ult', name: 'Mitoz Patlaması', icon: '🧬', tags: ['bolunme'],
@@ -164,6 +222,17 @@
         { txt: 'Hasar %90, süre 7sn', dmg: 0.9, dur: 7 },
       ],
     },
+    {
+      id: 'c_u_eel', stage: S, slot: 'ult', name: 'Elektroplak Deşarjı', icon: '🔱', tags: ['elektrik'],
+      kind: 'beam', cost: 0, cd: 2, flavor: 'Tüm hücrelerini tek bir yıldırım ışınına bağlarsın; nişanını izler, önündeki her şeyi deler.',
+      base: { dmg: 0.45, tick: 0.35, dur: 3.5, range: 18, width: 1.6, pierce: true, selfSlow: 0.35, turn: 4, st: [['shock', 1]] },
+      ranks: [
+        { txt: 'Süre 4.5sn', dur: 4.5 },
+        { txt: 'Genişlik 2.4m, yavaşlatır (Felç)', width: 2.4, st: [['shock', 1], ['slow', 1]] },
+        { txt: 'Hasar %55/tık', dmg: 0.55 },
+        { txt: 'Menzil 24m, hasar %65/tık', range: 24, dmg: 0.65 },
+      ],
+    },
   ]);
 
   EV.DATA.addPassives([
@@ -177,5 +246,8 @@
     { id: 'p_vacu',  stage: S, name: 'Açgözlü Vakuol',   icon: '🍽️', tags: ['asit'],     max: 5, per: { xpGain: 0.08, pickup: 0.25, lifesteal: 0.01 } },
     { id: 'p_divide', stage: S, name: 'Hızlı Bölünme',   icon: '🧫', tags: ['bolunme'],  max: 5, per: { summonPower: 0.15 },
       bonus: [{ at: 3, mods: { summonCount: 1 } }] },
+    { id: 'p_spore',  stage: S, name: 'Spor Kesesi',     icon: '🌫️', tags: ['zehir'],    max: 5, per: { area: 0.06, statusDur: 0.05 } },
+    { id: 'p_chemo',  stage: S, name: 'Kemotaksi',       icon: '🧭', tags: ['asit'],     max: 5, per: { speed: 0.04, critDmg: 0.1 },
+      bonus: [{ at: 3, mods: { pickup: 0.3 } }] },
   ]);
 })();

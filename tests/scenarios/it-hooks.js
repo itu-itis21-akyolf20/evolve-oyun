@@ -24,8 +24,11 @@ function dummy(dist) {
   EV.Enemies.clearAll(g);
   const p = P.group.position;
   const yaw = P.group.rotation.y;
-  const e = EV.Enemies.make(g, EV.MOBS.ENEMIES[0][1], { pos: { x: p.x + Math.sin(yaw) * dist, z: p.z + Math.cos(yaw) * dist }, hp: 1e9, dmg: 0 });
+  // sabit kukla (liste sırası yeni türlerle değişebiliyor; hızlı tür kaçıp menzilden çıkıyordu)
+  const e = EV.Enemies.make(g, EV.MOBS.find(0, 'amoeba'), { pos: { x: p.x + Math.sin(yaw) * dist, z: p.z + Math.cos(yaw) * dist }, hp: 1e9, dmg: 0 });
   e.behavior = 'passive';
+  e.speed = 0;
+  EV.Enemies.rebuildGrid(g);                           // ızgarada olsun (atılım yakın arama yapıyor)
   return e;
 }
 function tick(n) { for (let i = 0; i < n; i++) { g.paused = false; g.time += 1 / 30; EV.tick(1 / 30); In.endFrame(); } }

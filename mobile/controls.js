@@ -37,7 +37,6 @@
       '<button data-a="build" title="Yapı">📜</button>' +
       '<button data-a="hardlock" title="Kamerayı hedefe kilitle">🔒</button>' +
       '<button data-a="assist" title="Otomatik hedef" class="mAssist">🤖</button>' +
-      '<button data-a="view" title="Birinci / üçüncü şahıs">👁️</button>' +
       '<button data-a="auto" title="Otomatik yetenek" class="mAuto">🔁</button>' +
       '<button data-a="full" title="Tam ekran">⛶</button>' +
     '</div>' +

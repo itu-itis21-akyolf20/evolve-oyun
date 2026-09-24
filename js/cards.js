@@ -56,8 +56,9 @@ EV.Cards = (function () {
     if (def.slot === 'ult') bits.push('Öfke 100');
     else bits.push('Enerji ' + p.cost);
     bits.push('Bekleme ' + p.cd + 'sn');
-    if ((def.kind === 'zone' || def.kind === 'leap') && def.base.castRange) bits.push('basılı tut → nişan → bırak');
+    if (['zone', 'leap', 'barrage', 'totem', 'blink'].indexOf(def.kind) >= 0 && def.base.castRange) bits.push('basılı tut → nişan → bırak');
     if (def.kind === 'chain') bits.push('hedef gerekir');
+    if (def.kind === 'beam') bits.push('nişanını izler');
     return '<div class="cmeta">' + bits.join(' · ') + '</div>';
   }
 
@@ -169,6 +170,16 @@ EV.Cards = (function () {
   function openEvolve(game, offer, title, body, onChoose) {
     $('evTitle').textContent = title;
     $('evBody').innerHTML = body;
+
+    // beden seçimi (varsa): tıklayınca seçili olur; gen seçimi evrimi başlatır
+    const forms = offer.forms || [];
+    let formSel = forms.length ? (forms.find((f) => f.id === offer.formNow) || forms[0]).id : null;
+    $('evFormSec').hidden = !forms.length;
+    $('evForms').innerHTML = forms.map((f) => '<div class="form" data-f="' + f.id + '"><div class="fi">' + f.icon + '</div>' +
+      '<div class="fn">' + f.name + '</div><div class="fd">' + f.desc + '</div><div class="fm">' + DATA.modsText(f.mods) + '</div></div>').join('');
+    const markForm = () => $('evForms').querySelectorAll('.form').forEach((n) => n.classList.toggle('sel', n.dataset.f === formSel));
+    $('evForms').querySelectorAll('.form').forEach((n) => { n.onclick = () => { formSel = n.dataset.f; markForm(); U.audio.card(); }; });
+    markForm();
     const genes = offer.genes;
     $('evGenes').innerHTML = genes.map((g, i) => {
       const fus = DATA.allFusions().filter((f) => f.needGene === g.id).map((f) => f.name);
@@ -194,7 +205,7 @@ EV.Cards = (function () {
       $('evolvePanel').hidden = true;
       open = null;
       current = null;
-      onChoose(genes[i] ? genes[i].id : null);
+      onChoose(genes[i] ? genes[i].id : null, formSel);
     };
     current = { evolveDone: done, count: Math.max(1, genes.length) };
     $('evGenes').querySelectorAll('.gene').forEach((n) => { n.onclick = () => { if (!clickLocked()) done(+n.dataset.i); }; });
