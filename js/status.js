@@ -21,7 +21,7 @@ EV.Status = (function () {
   const TICK = 0.5;
   const REACT_CD = 1.5;
 
-  const isBoss = (t) => !!(t.isAlpha || t.isApex);
+  const isBoss = (t) => !!(t.isAlpha || t.isApex || t.isMini);
   const alive = (game, t) => (t === game.player ? t.alive : t.alive);
 
   function has(t, id) { return !!(t.st && t.st[id]); }

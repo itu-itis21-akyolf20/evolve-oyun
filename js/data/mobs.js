@@ -152,8 +152,22 @@ EV.MOBS = (function () {
       body: B('land', 3.2, 0x3b2a20, 0x1a120c, 0x8a6b4a, 0xff2d2d, { legs: 4, tail: 'short', spikes: true, fur: true, ears: true, horns: true, fangs: true }) },
   ];
 
+  /* ---------------------------------------------------------
+     ARA BOSSLAR — EVO %45'te bir kez gelir. 2 yetenek, uyarılı saldırılar.
+     Yenince garanti Değerli+ eşya, bol Gen Özü ve büyük XP.
+     hp/dmg seviye 1 değerleri; normal yaratıklar gibi seviyeyle ölçeklenir.
+     --------------------------------------------------------- */
+  const MINIS = [
+    { id: 'bigamoeba', kit: 'miniCell', name: 'Dev Amip', tier: 6, hp: 1500, dmg: 18, speed: 4.8, evo: 0, xp: 0,
+      body: B('cell', 1.7, 0xd8b86a, 0x9a7a3a, 0xf2e6c0, 0xff5a3d, { flagella: 0, cilia: true, spikes: true, mouth: 0x9a7a3a }) },
+    { id: 'hornlead', kit: 'miniReptile', name: 'Boynuzlu Lider', tier: 6, hp: 4200, dmg: 38, speed: 6.4, evo: 0, xp: 0,
+      body: B('land', 1.5, 0x7a3a2a, 0x4a1a12, 0xd0a080, 0xffd83d, { legs: 4, tail: 'long', spikes: true, horns: true, fangs: true }) },
+    { id: 'oldboar', kit: 'miniMammal', name: 'Yaşlı Yaban Domuzu', tier: 6, hp: 9500, dmg: 70, speed: 7.2, evo: 0, xp: 0,
+      body: B('land', 1.6, 0x3a2e24, 0x1e1712, 0x7a6450, 0xff3d2d, { legs: 4, tail: 'short', fur: true, ears: true, horns: true, fangs: true }) },
+  ];
+
   // güce göre sıralı: doğum mantığı listenin başından başlayıp sonunu açar
   ENEMIES.forEach((pool) => pool.sort((a, b) => a.tier - b.tier));
 
-  return { ENEMIES, ALPHAS, APEX };
+  return { ENEMIES, ALPHAS, APEX, MINIS };
 })();

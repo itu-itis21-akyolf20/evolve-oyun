@@ -202,7 +202,7 @@ EV.UI = (function () {
     const t = (P.lockTarget && P.lockTarget.alive) ? P.lockTarget : (P.hover && P.hover.alive ? P.hover : null);
     el.crosshair.classList.toggle('enemy', !!P.hover && !P.hover.ally);
     el.crosshair.classList.toggle('locked', !!P.lockTarget);
-    if (!t || t.isAlpha) { el.targetFrame.hidden = true; return; }
+    if (!t || t.isAlpha || t.isMini) { el.targetFrame.hidden = true; return; }
     el.targetFrame.hidden = false;
     el.targetFrame.classList.toggle('locked', t === P.lockTarget);
     el.tfName.textContent = t.name;
@@ -216,7 +216,7 @@ EV.UI = (function () {
 
   /* ---------------- boss ---------------- */
   function updateBoss(game, camera) {
-    const b = game.boss;
+    const b = (game.boss && game.boss.alive) ? game.boss : game.miniBoss;
     if (!b || !b.alive) { el.bossBanner.hidden = true; el.marker.hidden = true; return; }
     el.bossBanner.hidden = false;
     el.bossName.textContent = b.name + ' · Sv ' + b.lvl + (b.boss && b.boss.phase > 1 ? ' · Faz ' + b.boss.phase : '');
@@ -235,7 +235,7 @@ EV.UI = (function () {
   }
 
   function bossCast(e, name) {
-    if (!e.isAlpha) return;
+    if (!e.isAlpha && !e.isMini) return;
     el.bossCast.textContent = '⚠ ' + name;
     clearTimeout(castTimer);
     castTimer = setTimeout(() => { el.bossCast.textContent = ''; }, 1600);

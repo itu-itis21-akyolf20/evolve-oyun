@@ -22,6 +22,23 @@ EV.Enemies = (function () {
   let nextId = 1;
   let packId = 1;
 
+  /* Aynı türün 3 seviyesi: II = +%20 can / +%10 hasar, III = +%40 / +%20.
+     Biraz daha iri görünürler, adlarında II/III yazar, ödülleri de büyür. */
+  const VARIANT = [null,
+    { hp: 1.0, dmg: 1.0, size: 1.0, reward: 1.0, suffix: '' },
+    { hp: 1.2, dmg: 1.1, size: 1.1, reward: 1.25, suffix: ' II' },
+    { hp: 1.4, dmg: 1.2, size: 1.2, reward: 1.5, suffix: ' III' },
+  ];
+
+  /** Oyuncu seviyesi arttıkça II ve III daha sık çıkar. */
+  function rollVariant(game) {
+    const L = game.build.level;
+    const p3 = Math.min(0.2, 0.04 + 0.012 * L);
+    const p2 = Math.min(0.4, 0.22 + 0.012 * L);
+    const r = Math.random();
+    return r < p3 ? 3 : r < p3 + p2 ? 2 : 1;
+  }
+
   /* =========================================================
      Mekânsal ızgara (her kare yeniden kurulur)
      ========================================================= */
@@ -109,7 +126,7 @@ EV.Enemies = (function () {
   const _tc = new THREE.Color();
   function updateBar(game, e) {
     const bar = e.hpBar;
-    const show = e.isAlpha || e.isApex || e === game.player.lockTarget || e === game.player.hover ||
+    const show = e.isAlpha || e.isApex || e.isMini || e === game.player.lockTarget || e === game.player.hover ||
       (game.time - (e.lastHitT || -99) < 4) || (e.ally && e.hp < e.maxHp);
     bar.visible = !!show;
     if (!show) return;
@@ -147,7 +164,9 @@ EV.Enemies = (function () {
 
   function make(game, def, opts) {
     opts = opts || {};
-    const group = EV.Creature.build(opts.body || def.body);
+    const V = VARIANT[opts.variant || 1];
+    const body = opts.body || (V.size !== 1 ? Object.assign({}, def.body, { scale: def.body.scale * V.size }) : def.body);
+    const group = EV.Creature.build(body);
     const spot = opts.pos || W.randomSpawn(game.player.group.position, T.spawnMin, T.spawnMax);
     group.position.set(spot.x, W.groundY(spot.x, spot.z), spot.z);
     group.rotation.y = U.rand(0, Math.PI * 2);
@@ -156,13 +175,14 @@ EV.Enemies = (function () {
     const hp = opts.hp != null ? opts.hp : def.hp;
     const e = {
       id: nextId++, def,
-      name: opts.name || def.name,
-      lvl: opts.lvl || game.build.level,
+      name: opts.name || def.name + V.suffix,
+      lvl: opts.lvl || game.build.level + ((opts.variant || 1) - 1) * 2,
+      variant: opts.variant || 1,
       maxHp: hp, hp,
       dmg: opts.dmg != null ? opts.dmg : def.dmg,
       speed: (def.speed || 6) * (opts.ally ? 1 : game.diff.speed),
       armor: def.armor || 0,
-      evo: def.evo || 0, xp: def.xp != null ? def.xp : (def.evo || 0),
+      evo: (def.evo || 0) * V.reward, xp: (def.xp != null ? def.xp : (def.evo || 0)) * V.reward,
       aggro: def.aggro || 14,
       behavior: opts.ally ? 'ally' : (def.behavior || 'aggressive'),
       atk: def.atk || { range: 1.5, windup: 0.45, cd: 1.4 },
@@ -216,7 +236,8 @@ EV.Enemies = (function () {
       const p = { x: c.x + U.rand(-4, 4), z: c.z + U.rand(-4, 4) };
       if (W.blocked(p.x, p.z, 1)) { p.x = c.x; p.z = c.z; }
       W.clampToPlay(p);
-      make(game, def, { pos: p, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg, pack: pid });
+      const v = rollVariant(game);
+      make(game, def, { pos: p, hp: def.hp * sc.hp * VARIANT[v].hp, dmg: def.dmg * sc.dmg * VARIANT[v].dmg, pack: pid, variant: v });
     }
   }
 
@@ -229,7 +250,7 @@ EV.Enemies = (function () {
     let n = 0;
     for (let i = 0; i < game.enemies.length; i++) {
       const e = game.enemies[i];
-      if (!e.alive || e.ally || e.isAlpha || e.isApex || e.peaceful) continue;
+      if (!e.alive || e.ally || e.isAlpha || e.isApex || e.isMini || e.peaceful) continue;
       if (e.group.position.distanceToSquared(p) < R2) n++;
     }
     return n;
@@ -250,7 +271,7 @@ EV.Enemies = (function () {
     const p = game.player.group.position;
     for (let i = game.enemies.length - 1; i >= 0; i--) {
       const e = game.enemies[i];
-      if (!e.alive || e.ally || e.isAlpha || e.isApex) continue;
+      if (!e.alive || e.ally || e.isAlpha || e.isApex || e.isMini) continue;
       if (e.isMate && game.player.mateTarget === e) continue;
       if (e.group.position.distanceTo(p) > T.despawn) despawn(game, i);
     }
@@ -318,13 +339,29 @@ EV.Enemies = (function () {
       }
       return;
     }
-    if (game.bossActive) return;
+    if (game.bossActive || (game.miniBoss && game.miniBoss.alive)) return;
     game.apex = null;
     game.apexTimer -= dt;
     if (game.apexTimer <= 0) {
       game.apexTimer = U.rand(def.respawn[0], def.respawn[1]) * game.diff.apexTimer;
       spawnApex(game);
     }
+  }
+
+  function spawnMini(game) {
+    const def = EV.MOBS.MINIS[game.stageIndex];
+    const sc = statScale(game, 'normal');
+    const name = game.generation > 0 ? 'Kadim ' + def.name : def.name;
+    const pos = W.randomSpawn(game.player.group.position, 18, 26, 4);
+    const e = make(game, def, { pos, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg, name, lvl: game.build.level + 4 });
+    e.isMini = true;
+    e.behavior = 'boss';
+    EV.Boss.init(game, e, def.kit);
+    game.miniBoss = e;
+    EV.FX.ring(e.group.position, 0xffa03d, 20, 1.0);
+    U.audio.roar();
+    game.toast('⚔️ ARA BOSS: ' + name.toLocaleUpperCase('tr-TR') + '<br><span class="sub">Yen: garanti Değerli eşya + Gen Özü</span>', '#ffb35a', 3200);
+    return e;
   }
 
   const SUMMON_NAME = ['Tomurcuk', 'Kopya', 'Kurt'];
@@ -613,7 +650,7 @@ EV.Enemies = (function () {
 
   return {
     make, despawn, clearAll, seed, maintain, update, spawnPack,
-    spawnAlpha, spawnApex, maintainApex, spawnSummon, onDamaged, steer,
+    spawnAlpha, spawnApex, spawnMini, maintainApex, spawnSummon, onDamaged, steer,
     forEachNear, nearest, statScale, rebuildGrid,
   };
 })();

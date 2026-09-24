@@ -23,6 +23,7 @@ window.EV = window.EV || {};
     build: null, legacy: null, inv: null, diff: CFG.DIFFICULTY.normal,
     stats: { totalDmg: 0, maxHit: 0 },
     boss: null, bossActive: false, apex: null, apexTimer: 40, pendingStage: false,
+    miniBoss: null, miniDone: false,
     paused: true, started: false, spawnTimer: 0, foodTimer: 0, hadLock: false,
 
     /* ---------------- aşama bilgisi ---------------- */
@@ -81,6 +82,10 @@ window.EV = window.EV || {};
         const p = atPos.clone(); p.y += 2;
         EV.UI.dmgNumber(p, '+' + U.fmt(evo) + ' EVO', 'evo', this.camera);
       }
+      // ara boss: aşamanın ortasında (EVO %45) bir kez
+      if (!this.miniDone && !this.miniBoss && !this.bossActive && !this.pendingStage && this.evo >= this.evoMax() * 0.45) {
+        EV.Enemies.spawnMini(this);
+      }
       if (this.evo >= this.evoMax() && !this.bossActive && !this.pendingStage) {
         EV.Enemies.spawnAlpha(this);
         EV.UI.toast('ALFA UYANDI<br><span class="sub">Yerdeki kırmızı alanlardan kaç, açık bul, vur</span>', '#ff8a8a', 3200);
@@ -107,6 +112,12 @@ window.EV = window.EV || {};
         this.apexTimer = U.rand(150, 210) * this.diff.apexTimer;
         this.gainEvo(Math.round(e.evo * scale), Math.round(EV.Build.xpNeed(this) * 1.5), pos);
         EV.UI.toast('☠️ ' + e.name.toLocaleUpperCase('tr-TR') + ' DEVRİLDİ', '#ffd83d', 3000);
+        U.audio.evolve();
+      } else if (e.isMini) {
+        this.miniBoss = null;
+        this.miniDone = true;
+        this.gainEvo(Math.round(this.evoMax() * 0.06), Math.round(EV.Build.xpNeed(this) * 1.2), pos);
+        EV.UI.toast('⚔️ ' + e.name.toLocaleUpperCase('tr-TR') + ' DEVRİLDİ', '#ffb35a', 2500);
         U.audio.evolve();
       } else if (e.isAlpha) {
         this.gainEvo(0, e.xp, null);
@@ -167,6 +178,8 @@ window.EV = window.EV || {};
       this.boss = null;
       this.bossActive = false;
       this.apex = null;
+      this.miniBoss = null;
+      if (!keepBuild) this.miniDone = false;
       const ad = EV.MOBS.APEX[Math.min(this.stageIndex, EV.MOBS.APEX.length - 1)];
       this.apexTimer = U.rand(ad.first[0], ad.first[1]) * this.diff.apexTimer;
 
@@ -265,7 +278,7 @@ window.EV = window.EV || {};
       for (let i = this.enemies.length - 1; i >= 0; i--) {
         const e = this.enemies[i];
         if (!e.alive || e.ally) continue;
-        if (e.isAlpha) { e.hp = Math.min(e.maxHp, e.hp + e.maxHp * this.diff.bossHeal); continue; }
+        if (e.isAlpha || e.isMini) { e.hp = Math.min(e.maxHp, e.hp + e.maxHp * this.diff.bossHeal); continue; }
         const d = e.group.position.distanceTo(p);
         if (e.isApex && d < 30) {
           EV.Enemies.despawn(this, i);
@@ -304,7 +317,7 @@ window.EV = window.EV || {};
         localStorage.setItem(SAVE_KEY, JSON.stringify({
           v: 4, diff: this.diff.id, stageIndex: this.stageIndex, generation: this.generation,
           evo: this.evo, kills: this.kills, legacy: this.legacy, inv: EV.Items.serialize(this.inv),
-          stats: { totalDmg: this.stats.totalDmg, maxHit: this.stats.maxHit },
+          stats: { totalDmg: this.stats.totalDmg, maxHit: this.stats.maxHit }, miniDone: this.miniDone,
           build: { level: b.level, xp: b.xp, skills: b.skills.map((s) => ({ id: s.id, rank: s.rank, fused: !!s.fused })),
             ult: b.ult ? { id: b.ult.id, rank: b.ult.rank } : null, passives: b.passives, rerolls: b.rerolls, uses: b.uses, picks: b.picks,
             history: b.history.slice(-12) },
@@ -331,6 +344,7 @@ window.EV = window.EV || {};
       this.stageIndex = U.clamp(num(d.stageIndex, 0) | 0, 0, CFG.STAGES.length - 1);
       this.generation = U.clamp(num(d.generation, 0) | 0, 0, 200);
       this.kills = Math.max(0, num(d.kills, 0));
+      this.miniDone = !!d.miniDone;
       const st = d.stats && typeof d.stats === 'object' ? d.stats : {};
       this.stats = { totalDmg: U.clamp(num(st.totalDmg, 0), 0, 1e15), maxHit: U.clamp(num(st.maxHit, 0), 0, 1e13) };
       const lg = d.legacy || {};

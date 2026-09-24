@@ -70,7 +70,7 @@ EV.Combat = (function () {
 
     // geri tepme (iri yaratıklar az savrulur)
     if (o.knock && o.from && e.alive) {
-      const heavy = e.isAlpha || e.isApex;
+      const heavy = e.isAlpha || e.isApex || e.isMini;
       _v.set(e.group.position.x - o.from.x, 0, e.group.position.z - o.from.z);
       const l = _v.length() || 1;
       const f = o.knock * (heavy ? 0.15 : 1) * (o.pull ? -1 : 1);

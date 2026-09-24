@@ -323,6 +323,56 @@ EV.Boss = (function () {
       ],
     },
 
+    /* ---------- Ara bosslar ---------- */
+    miniCell: {
+      basic: { mult: 1.0, cd: 2.2 }, phases: [],
+      abilities: [
+        { id: 'spit3', name: 'Asit Püskürtme', cd: 7, min: 0, max: 28, run: (g, e) => {
+          const pp = g.player.group.position;
+          for (let i = 0; i < 3; i++) {
+            const a = U.rand(0, Math.PI * 2), r = i === 0 ? 0 : U.rand(2.5, 5);
+            circle(g, e, pp.x + Math.cos(a) * r, pp.z + Math.sin(a) * r, 2.8, 1.2 * Wm(g, e), 0.9, [['poison', 2]], i * 0.2);
+          }
+          return 0.6;
+        } },
+        { id: 'burst', name: 'Zar Patlaması', cd: 9, min: 0, max: 8, run: (g, e) => {
+          const w = 1.3 * Wm(g, e);
+          circle(g, e, e.group.position.x, e.group.position.z, 6, w, 1.2, null, 0, 8);
+          return w + 0.2;
+        } },
+      ],
+    },
+    miniReptile: {
+      basic: { mult: 1.0, cd: 2.0 }, phases: [],
+      abilities: [
+        { id: 'gore', name: 'Boynuz Hücumu', cd: 6, min: 5, max: 22, run: (g, e) => {
+          const w = 1.0 * Wm(g, e);
+          charge(g, e, Math.min(20, e.group.position.distanceTo(g.player.group.position) + 4), 3, w, 1.4, null, 0.35);
+          return w + 0.45;
+        } },
+        { id: 'sweep', name: 'Kuyruk Süpürmesi', cd: 6, min: 0, max: 9, run: (g, e) => {
+          const w = 0.95 * Wm(g, e);
+          cone(g, e, yawTo(e, g.player.group.position.x, g.player.group.position.z), 8, 2.0, w, 1.2, [['slow', 1]], 8);
+          return w + 0.2;
+        } },
+      ],
+    },
+    miniMammal: {
+      basic: { mult: 1.0, cd: 2.0 }, phases: [],
+      abilities: [
+        { id: 'rush', name: 'Hücum', cd: 6, min: 5, max: 22, run: (g, e) => {
+          const w = 0.95 * Wm(g, e);
+          charge(g, e, Math.min(20, e.group.position.distanceTo(g.player.group.position) + 4), 3.2, w, 1.4, null, 0.35);
+          return w + 0.45;
+        } },
+        { id: 'stomp', name: 'Toprak Ezme', cd: 8, min: 0, max: 7, run: (g, e) => {
+          const w = 1.1 * Wm(g, e);
+          circle(g, e, e.group.position.x, e.group.position.z, 6, w, 1.5, [['stun', 0.5]], 0, 10);
+          return w + 0.2;
+        } },
+      ],
+    },
+
     /* ---------- Apex avcılar ---------- */
     apexCell: {
       basic: { mult: 1.0, cd: 2.0 }, phases: [],

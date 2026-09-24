@@ -242,15 +242,17 @@ EV.Items = (function () {
 
   /** Öldürme ödülü: Gen Özü (tier kadar) + düşük ihtimalle eşya. */
   function onKill(game, e) {
-    const tier = e.def.tier || 1;
+    const tier = (e.def.tier || 1) + ((e.variant || 1) - 1);
     let ess = tier;
     let chance = IC.dropChance * tier;
     let boost = 1;
     if (e.isApex) { ess = 40; chance = 1; boost = 6; }
     if (e.isAlpha) { ess = 60; chance = 1; boost = 12; }
+    if (e.isMini) { ess = 25; chance = 1; boost = 4; }
     game.inv.essence += Math.round(ess * (1 + game.generation * 0.3));
     if (Math.random() < chance) {
       const it = randomItem(game, 'drop', boost);
+      if (e.isMini && it.rarity < 2) { it.rarity = 2; it.affixes.length = 0; for (let i = 0; i < R[2].affixes; i++) addAffix(it); rename(it); }
       if (e.isAlpha && it.rarity < 3) { it.rarity = 3; it.affixes.length = 0; for (let i = 0; i < R[3].affixes; i++) addAffix(it); rename(it); }
       dropAt(game, e.group.position, it);
     }

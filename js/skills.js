@@ -202,7 +202,7 @@ EV.Skills = (function () {
           const dx = z.x - e.group.position.x, dz = z.z - e.group.position.z;
           const d = Math.hypot(dx, dz);
           if (d < 0.6) return;
-          const heavy = e.isAlpha || e.isApex ? 0.2 : 1;
+          const heavy = e.isAlpha || e.isApex || e.isMini ? 0.2 : 1;
           const s = Math.min(d, z.pull * heavy * dt);
           e.group.position.x += (dx / d) * s;
           e.group.position.z += (dz / d) * s;
