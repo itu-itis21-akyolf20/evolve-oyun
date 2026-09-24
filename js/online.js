@@ -72,6 +72,7 @@ EV.Online = (function () {
   /** Puanı gönderir; force değilse en fazla 30 sn'de bir. */
   let retryTimer = null;
   function submit(game, force, isRetry) {
+    if (EV.TEST) return;                                   // test modu liderliğe yazmaz
     if (!enabled || !game.started || name().length < 2) return;
     const now = Date.now();
     if (!force && now - lastSent < 30000) return;
@@ -90,6 +91,7 @@ EV.Online = (function () {
 
   /** Sekme kapanırken son durumu gönder. */
   function beacon(game) {
+    if (EV.TEST) return;
     // sendBeacon başlık (apikey) gönderemez; keepalive fetch sekme kapanınca da tamamlanır
     if (!enabled || !game.started || name().length < 2) return;
     rpc('submit_score', payload(game), true).catch(() => { /* çevrimdışı */ });
@@ -101,6 +103,7 @@ EV.Online = (function () {
      aynı oyuna devam edilir (liderlik kaydı da aynı kişiye bağlı kalır). */
   let lastCloud = 0;
   function cloudSave(data, force) {
+    if (EV.TEST) return;
     if (!enabled || !data) return;
     const now = Date.now();
     if (!force && now - lastCloud < 60000) return;

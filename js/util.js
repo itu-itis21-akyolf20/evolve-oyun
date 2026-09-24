@@ -3,6 +3,9 @@
    ============================================================ */
 window.EV = window.EV || {};
 
+// Test modu: link ?test ile açılır (devtools.js). Kayıt ayrı, liderliğe/buluta gönderim yok.
+EV.TEST = /(^|[?&#])test(?![a-z0-9])/i.test(location.search + location.hash);
+
 EV.U = (function () {
   'use strict';
 
