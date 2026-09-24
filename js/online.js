@@ -17,7 +17,7 @@ EV.Online = (function () {
   const U = EV.U;
   const $ = (id) => document.getElementById(id);
   const SB_URL = 'https://xrexhojwiogllccjbjne.supabase.co';
-  const SB_KEY = 'sb_publishable_kWJdqAI7K9dq8IEf1fuscQ_Mpc9Nd';
+  const SB_KEY = 'sb_publishable_kWJdqAI7K9dq8IEf1fuscQ_Mpc9NdL4';
   const enabled = typeof fetch === 'function';
   let lastSent = 0;
   let open = false;
