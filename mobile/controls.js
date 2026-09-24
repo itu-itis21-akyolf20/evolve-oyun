@@ -38,6 +38,7 @@
       '<button data-a="hardlock" title="Kamerayı hedefe kilitle">🔒</button>' +
       '<button data-a="assist" title="Otomatik hedef" class="mAssist">🤖</button>' +
       '<button data-a="view" title="Birinci / üçüncü şahıs">👁️</button>' +
+      '<button data-a="auto" title="Otomatik yetenek" class="mAuto">🔁</button>' +
       '<button data-a="full" title="Tam ekran">⛶</button>' +
     '</div>' +
     '<div id="mBtns">' +
@@ -172,6 +173,7 @@
     if (anyModal()) { if (touches.size) resetAll(); }
     if (!g.started || !g.build) return;
     const b = g.build, P = g.player;
+    root.querySelector('.mAuto').classList.toggle('active', !!P.autoCast);
     const rageMax = EV.CFG.TUNE.rageMax;
     skillEls.forEach((x) => {
       const sk = x.s.slot === 'R' ? b.ult : b.skills[x.s.slot];

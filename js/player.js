@@ -104,7 +104,7 @@ EV.Player = (function () {
       hp: 100, energy: 100, rage: 0, shield: 0, shieldT: 0,
       alive: true, iframe: 0, radius: 1, sizeScale: 1,
       speed01: 0, t: 0, moving: false,
-      yaw: 0, pitch: 0.4, zoom: 1, aimYaw: 0, faceT: 0, fps: loadFps(),
+      yaw: 0, pitch: 0.4, zoom: 1, aimYaw: 0, faceT: 0, fps: loadFps(), autoCast: loadAuto(), autoT: 0,
       aimPoint: new THREE.Vector3(), hover: null, lockTarget: null,
       stats: null, buffs: [], buffOnHit: [],
       dash: null, leap: null, leapY: 0, hunt: null,
@@ -349,6 +349,78 @@ EV.Player = (function () {
     EV.UI.flashSlot(slot);
   }
 
+  /* ---------------- otomatik yetenek (G ile aç/kapat) ----------------
+     Açıkken Q/E/F, beklemesi bitince ve menzilde hedef varken kendiliğinden
+     atılır. Hareket yetenekleri (atılım, sıçrama, av) atılmaz: oyuncuyu
+     istemediği yere fırlatırdı. Ultimate (R) de atılmaz: öfke değerli, oyuncu
+     onu boss / kalabalık için saklar. Atılım için enerji payı bırakılır, gizlenirken
+     (saklanma yeri) atılmaz, yetenekler arasında kısa ara verilir. */
+  const AUTO_KEY = 'evolve_auto';
+  const AUTO_SKIP = { dash: 1, leap: 1, hunt: 1 };
+  const AUTO_GAP = 0.35;          // iki otomatik atış arası (sn)
+  const AUTO_RESERVE = 15;        // atılım için bırakılan enerji
+  function loadAuto() { try { return localStorage.getItem(AUTO_KEY) === '1'; } catch (e) { return false; } }
+
+  function toggleAuto(game) {
+    const P = game.player;
+    P.autoCast = !P.autoCast;
+    try { localStorage.setItem(AUTO_KEY, P.autoCast ? '1' : '0'); } catch (e) { /* gizli sekme */ }
+    game.toast(P.autoCast ? '🔁 Otomatik yetenek AÇIK <span class="sub">(ulti, sıçrama, atılım hariç · G)</span>' : 'Otomatik yetenek kapalı',
+      P.autoCast ? '#9de89d' : '#ffb35a', 1600);
+  }
+
+  /** Yeteneğin hedefe atılabileceği yüzey mesafesi. */
+  function autoRange(def, p) {
+    switch (def.kind) {
+      case 'bolt': return (p.range || 20) * 0.9;
+      case 'chain': return p.range || 16;
+      case 'cone': return (p.range || 4) + 1;
+      case 'nova': return (p.r || 5) * 0.9;
+      case 'zone': return p.castRange || 18;
+      case 'trap': return (p.r || 3) + 2;
+      case 'orbit': return (p.r || 3) + 2;
+      case 'buff': return 10;
+      case 'summon': return 16;
+      default: return 0;
+    }
+  }
+
+  function autoTarget(game) {
+    const P = game.player;
+    const lt = P.lockTarget;
+    if (lt && lt.alive && !lt.ally && !lt.peaceful) return lt;
+    const pos = P.group.position;
+    return EV.Enemies.nearest(pos.x, pos.z, 22, (e) => !e.ally && !e.peaceful);
+  }
+
+  function autoCast(game, dt) {
+    const P = game.player;
+    P.autoT -= dt;
+    if (P.autoT > 0 || P.aiming || P.hidden) return;
+    const t = autoTarget(game);
+    if (!t) return;
+    const pos = P.group.position;
+    const d = EV.Creature.surfDist(t.group, pos.x, pos.z);
+    for (let slot = 0; slot < 3; slot++) {
+      const sd = slotDef(game, slot);
+      if (!sd || AUTO_SKIP[sd.def.kind] || sd.s.cd > 0) continue;
+      const p = DATA.params(sd.def, sd.s.rank);
+      if (P.energy - p.cost < AUTO_RESERVE) continue;
+      if (d > autoRange(sd.def, p)) continue;
+      // nişanı geçici olarak hedefe çevir (yer hedefliler hedefin altına düşer)
+      const saveAim = _aimSave.copy(P.aimPoint), saveHover = P.hover;
+      const tp = t.group.position;
+      P.aimPoint.set(tp.x, tp.y + t.group.userData.hipY, tp.z);
+      if (!P.lockTarget) P.hover = t;
+      const cd0 = sd.s.cd;
+      tryCast(game, slot);
+      P.aimPoint.copy(saveAim);
+      P.hover = saveHover;
+      if (sd.s.cd > cd0) { P.autoT = AUTO_GAP; return; }
+    }
+  }
+  const _aimSave = new THREE.Vector3();
+
   /* ---------------- kalıtsal yankılar ---------------- */
   function updateEchoes(game, dt) {
     const P = game.player;
@@ -469,6 +541,7 @@ EV.Player = (function () {
     if (P.faceT <= 0) P.aimYaw = aimYawNow;
 
     if (I.hit('KeyV')) toggleFps(game);
+    if (I.hit('KeyG')) toggleAuto(game);
 
     /* --- girdiler --- */
     const canAct = !inMotion && !busy && !EV.Status.stunned(P);
@@ -506,6 +579,7 @@ EV.Player = (function () {
         }
       }
       if (P.aiming && (I.mouse.rightPressed || I.hit('Escape'))) { P.aiming = null; EV.Decal.hideIndicator(); }
+      if (P.autoCast) autoCast(game, dt);
     } else if (P.aiming) {
       P.aiming = null;
       EV.Decal.hideIndicator();
@@ -600,5 +674,5 @@ EV.Player = (function () {
   /** 0..1 şarj oranı (arayüz için). */
   function charge(game) { const P = game.player; return P && P.charge > 0 ? chargeFrac(P.charge) : -1; }
 
-  return { create, rebuild, update, updateCamera, cycleLock, charge, toggleFps };
+  return { create, rebuild, update, updateCamera, cycleLock, charge, toggleFps, toggleAuto };
 })();
