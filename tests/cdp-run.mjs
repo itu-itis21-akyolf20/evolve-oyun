@@ -46,7 +46,9 @@ const url = opt('url', pathToFileURL(join(root, 'index.html')).href);   // --url
 const chrome = spawn(exe, [
   '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
   `--window-size=${width},${height}`, '--no-first-run', '--no-default-browser-check',
-  '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--mute-audio',
+  // --gpu: gerçek ekran kartı (FPS ölçümü için); varsayılan yazılımsal çizim (her makinede aynı)
+  ...(args.includes('--gpu') ? ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu-rasterization'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
+  '--mute-audio',
   '--allow-file-access-from-files', url,
 ], { stdio: 'ignore' });
 

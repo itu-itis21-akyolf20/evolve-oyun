@@ -729,7 +729,6 @@ EV.Enemies = (function () {
         const want = e.diveT > 0 ? Math.min(1.1, e.flyH) : e.flyH;
         e.flyNow = U.lerp(e.flyNow, want, Math.min(1, dt * (e.diveT > 0 ? 7 : 2.5)));
         pos.y = gy + e.flyNow;
-        if (e.group.userData.blob) e.group.userData.blob.position.y = 0.06 - e.flyNow;
       } else {
         W.resolveCollision(pos, e.radius);
         pos.y = gy;
@@ -737,7 +736,6 @@ EV.Enemies = (function () {
           e.hopT = Math.max(0, e.hopT - dt);
           const k = 1 - e.hopT / e.hopDur;
           pos.y += Math.sin(Math.PI * k) * 2.6;
-          if (e.group.userData.blob) e.group.userData.blob.position.y = 0.06 - Math.sin(Math.PI * k) * 2.6;
         }
       }
       e.moving = moving > 0;

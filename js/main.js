@@ -793,7 +793,10 @@ window.EV = window.EV || {};
     } catch (err) {
       console.error('Kare hatası:', err);
     }
-    if (Game.player && Game.player.group) EV.GFX.update(Game.paused ? 0 : dt, realDt, Game.player.group.position);
+    if (Game.player && Game.player.group) {
+      EV.GFX.update(Game.paused ? 0 : dt, realDt, Game.player.group.position);
+      EV.GFX.updateBlobs(Game);
+    }
     Game.renderer.render(Game.scene, Game.camera);
     EV.Input.endFrame();
   }

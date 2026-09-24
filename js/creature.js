@@ -17,6 +17,13 @@
    parts.wings = kanatlı (uçanlar). Uçma yüksekliği enemies.js'de.
    Animasyon: adımda bacak kaldırma, dönüşte yatma, nefes, saldırıdan
    önce geri çekilme, vurulunca sarsılma, ölüm pozu (deathPose).
+
+   ÇİZİM: kurulan parça ağacı skinify() ile TEK bir iskeletli mesh'e
+   (SkinnedMesh) çevrilir: her hareketli düğüm bir kemik olur, parçalar
+   kemiklerine bağlanır. Animasyon kodu aynı kalır (kemikleri döndürür),
+   ama yaratık başına 12-14 çizim çağrısı 1'e iner. Işıklı parçalar
+   aynı mesh'te 'glow' niteliğiyle kendinden ışıklı çizilir.
+   Yer gölgesi lekeleri gfx.js'te tek bir örneklenmiş mesh'tir.
    ============================================================ */
 window.EV = window.EV || {};
 
@@ -445,26 +452,132 @@ EV.Creature = (function () {
     return { cz, hl, r, top: _box.max.y };
   }
 
+  /** Yer gölgesi: mesh yerine yarıçap (gfx.js tüm lekeleri tek çizimde çizer). */
   function addBlob(root, r) {
-    const g = new THREE.CircleGeometry(r, 12);
-    g.rotateX(-Math.PI / 2);
-    const blob = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false }));
-    blob.position.y = 0.06;
-    root.add(blob);
-    return blob;
+    root.userData.blobR = r;
+    return null;
+  }
+
+  /* =========================================================
+     Tek çizim çağrısı: parça ağacı → iskeletli mesh
+     ========================================================= */
+  const GLOW_VERT = ['#include <common>', '#include <common>\nattribute float glow;\nvarying float vGlow;'];
+  const GLOW_VERT2 = ['#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;'];
+  const GLOW_FRAG = ['#include <common>', '#include <common>\nvarying float vGlow;'];
+  const GLOW_FRAG2 = ['#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor * vGlow;'];
+  function glowCompile(sh) {
+    sh.vertexShader = sh.vertexShader.replace(GLOW_VERT[0], GLOW_VERT[1]).replace(GLOW_VERT2[0], GLOW_VERT2[1]);
+    sh.fragmentShader = sh.fragmentShader.replace(GLOW_FRAG[0], GLOW_FRAG[1]).replace(GLOW_FRAG2[0], GLOW_FRAG2[1]);
+  }
+
+  const _m = new THREE.Matrix4();
+  const _v3 = new THREE.Vector3();
+  const _n3 = new THREE.Vector3();
+  const _nm = new THREE.Matrix3();
+
+  function skinify(root) {
+    const d = root.userData;
+    const mats = d.mats;
+    root.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+
+    // 1) hareketli düğümler (grup) → kemikler; ağaç yapısı korunur
+    const boneOf = new Map();
+    const bones = [];
+    function mk(node, parentBone) {
+      const b = new THREE.Bone();
+      b.position.copy(node.position);
+      b.rotation.copy(node.rotation);
+      b.scale.copy(node.scale);
+      b.userData = Object.assign({}, node.userData);
+      boneOf.set(node, b);
+      bones.push(b);
+      if (parentBone) parentBone.add(b);
+      node.children.forEach((c) => { if (!c.isMesh && !c.isSprite && c.isObject3D) mk(c, b); });
+      return b;
+    }
+    const rigBone = mk(d.rig, null);
+
+    // 2) parçaları kemik uzayında tek geometriye topla
+    const parts = [];
+    let verts = 0;
+    root.traverse((o) => {
+      if (!o.isMesh || (o.material !== mats.solid && o.material !== mats.glow)) return;
+      const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry;
+      parts.push({ o, g, bone: bones.indexOf(boneOf.get(o.parent)), glow: o.material === mats.glow ? 1 : 0 });
+      verts += g.attributes.position.count;
+    });
+    const pos = new Float32Array(verts * 3), nor = new Float32Array(verts * 3), col = new Float32Array(verts * 3);
+    const si = new Uint16Array(verts * 4), sw = new Float32Array(verts * 4), gl = new Float32Array(verts);
+    let k = 0;
+    parts.forEach((p) => {
+      _m.multiplyMatrices(inv, p.o.matrixWorld);
+      _nm.getNormalMatrix(_m);
+      const gp = p.g.attributes.position, gn = p.g.attributes.normal, gc = p.g.attributes.color;
+      for (let i = 0; i < gp.count; i++, k++) {
+        _v3.fromBufferAttribute(gp, i).applyMatrix4(_m);
+        pos[k * 3] = _v3.x; pos[k * 3 + 1] = _v3.y; pos[k * 3 + 2] = _v3.z;
+        if (gn) { _n3.fromBufferAttribute(gn, i).applyMatrix3(_nm).normalize(); nor[k * 3] = _n3.x; nor[k * 3 + 1] = _n3.y; nor[k * 3 + 2] = _n3.z; }
+        if (gc) { col[k * 3] = gc.getX(i); col[k * 3 + 1] = gc.getY(i); col[k * 3 + 2] = gc.getZ(i); }
+        si[k * 4] = Math.max(0, p.bone); sw[k * 4] = 1;
+        gl[k] = p.glow;
+      }
+      if (p.g !== p.o.geometry) p.g.dispose();
+      p.o.geometry.dispose();
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+    geo.setAttribute('glow', new THREE.BufferAttribute(gl, 1));
+    geo.computeBoundingSphere();
+    geo.boundingSphere.radius *= 1.25;                 // animasyon payı (kuyruk, kanat)
+
+    // 3) eski parça meshlerini kaldır; saydam zarı kemiğine taşı
+    const membrane = d.membrane;
+    if (membrane) { const b = boneOf.get(membrane.parent); membrane.parent.remove(membrane); b.add(membrane); }
+    root.remove(d.rig);
+    mats.glow.dispose();
+
+    const mesh = new THREE.SkinnedMesh(geo, mats.solid);
+    mats.solid.onBeforeCompile = glowCompile;
+    mesh.add(rigBone);
+    root.add(mesh);
+    mesh.bind(new THREE.Skeleton(bones));
+    mesh.userData.skin = true;
+
+    // 4) animasyon başvurularını kemiklere çevir
+    const B = (n) => (n ? boneOf.get(n) || n : n);
+    d.rig = rigBone;
+    d.neck = B(d.neck);
+    d.legs = d.legs.map(B);
+    d.wings = d.wings.map(B);
+    d.tentacles = d.tentacles.map((t) => ({ segs: t.segs.map(B), phase: t.phase }));
+    if (d.tail) {
+      const segs = (d.tail.userData.segments || []).map(B);
+      d.tail = B(d.tail);
+      d.tail.userData.segments = segs;
+    }
+    d.mesh = mesh;
+    return root;
   }
 
   /** kind: 'player' | 'boss' | 'creature' — gölge atma kararı gfx.js'te (kaliteye göre). */
   function build(spec, kind) {
     const root = spec.kind === 'cell' ? buildCell(spec) : buildLand(spec);
+    const blobR = root.userData.blobR;
+    skinify(root);
+    root.userData.blobR = blobR;
     const k = kind || 'creature';
     const cast = EV.GFX ? EV.GFX.castFor(k) : false;
     root.traverse((o) => {
-      if (!o.isMesh || o === root.userData.blob || (o.material && o.material.transparent)) return;
+      if (!o.isMesh || (o.material && o.material.transparent)) return;
       o.castShadow = cast;
       o.userData.shadowCast = k;
     });
-    if (cast && root.userData.blob) root.userData.blob.material.opacity = 0.1;   // gerçek gölge var
+    root.userData.realShadow = cast;
     return root;
   }
 
@@ -650,6 +763,7 @@ EV.Creature = (function () {
 
   function dispose(root) {
     root.traverse((o) => {
+      if (o.isSkinnedMesh && o.skeleton) o.skeleton.dispose();
       // Sprite'lar paylaşılan tek geometriyi kullanır: dispose edilmemeli.
       if (o.geometry && !o.isSprite) o.geometry.dispose();
       if (o.material) {

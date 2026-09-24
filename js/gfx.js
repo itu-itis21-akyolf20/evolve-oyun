@@ -237,6 +237,39 @@ EV.GFX = (function () {
   }
 
   /* =========================================================
+     Yer gölgesi lekeleri: tüm yaratıklar için TEK örneklenmiş mesh
+     ========================================================= */
+  const BLOB_MAX = 320;
+  let blobs = null;
+  const _bm = new THREE.Matrix4(), _bq = new THREE.Quaternion(), _bs = new THREE.Vector3(), _bp = new THREE.Vector3();
+  function buildBlobs() {
+    const g = new THREE.CircleGeometry(1, 14);
+    g.rotateX(-Math.PI / 2);
+    blobs = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false }), BLOB_MAX);
+    blobs.frustumCulled = false;
+    blobs.renderOrder = 1;
+    scene.add(blobs);
+  }
+
+  function updateBlobs(game) {
+    if (!blobs || !game) return;
+    let n = 0;
+    const put = (grp, alive) => {
+      const u = grp && grp.userData;
+      if (!u || !u.blobR || !alive || !grp.visible || n >= BLOB_MAX) return;
+      const p = grp.position;
+      const sh = u.realShadow ? 0.5 : 1;                 // gerçek gölge varsa leke silik
+      _bp.set(p.x, EV.World.height(p.x, p.z) + 0.07, p.z);
+      _bs.set(u.blobR * sh + 0.001, 1, u.blobR * sh + 0.001);
+      blobs.setMatrixAt(n++, _bm.compose(_bp, _bq, _bs));
+    };
+    if (game.player && game.player.group) put(game.player.group, game.player.alive);
+    for (let i = 0; i < game.enemies.length; i++) { const e = game.enemies[i]; put(e.group, e.alive); }
+    blobs.count = n;
+    blobs.instanceMatrix.needsUpdate = true;
+  }
+
+  /* =========================================================
      Kurulum ve aşama
      ========================================================= */
   let stageWater = false;
@@ -247,6 +280,7 @@ EV.GFX = (function () {
     renderer.toneMappingExposure = 1.3;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     buildSky();
+    buildBlobs();
     applyLevel(level, true);
   }
 
@@ -380,7 +414,7 @@ EV.GFX = (function () {
   }
 
   return {
-    init, applyStage, setTerrain, update, setPref, castFor, HEIGHT_GLSL,
+    init, applyStage, setTerrain, update, updateBlobs, setPref, castFor, HEIGHT_GLSL,
     get level() { return level; }, get pref() { return pref; }, get seg() { return Q().seg; }, get decor() { return Q().decor; },
     LEVELS, mobile,
   };
