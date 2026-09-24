@@ -434,9 +434,10 @@ window.EV = window.EV || {};
     EV.Input.init(Game.canvas, (locked) => {
       if (locked) { Game.hadLock = true; EV.UI.setLockHint(false); return; }
       if (!Game.started) return;
-      const modal = EV.Cards.isOpen() || EV.Inv.isOpen() || !document.getElementById('deathPanel').hidden;
+      const modal = EV.Cards.isOpen() || EV.Inv.isOpen() || EV.Online.isOpen() || !document.getElementById('deathPanel').hidden;
       if (!modal && Game.player.alive) {
-        if (Game.hadLock) Game.paused = true;
+        // Kilitliyken Esc sayfaya gelmez, sadece kilidi bırakır: duraklatma menüsü olarak liderlik açılır
+        if (Game.hadLock) { Game.paused = true; EV.Online.show(Game); return; }
         EV.UI.setLockHint(true);
       }
     });
@@ -506,18 +507,24 @@ window.EV = window.EV || {};
         if (EV.Online.isOpen()) { EV.Online.hide(); Game.resume(); }
         else if (!EV.Cards.isOpen() && !EV.Inv.isOpen() && Game.player.alive) { Game.pause(); EV.Online.show(Game); }
       }
-      if (e.code === 'Escape' && EV.Online.isOpen()) { EV.Online.hide(); EV.UI.setLockHint(true); }
+      if (e.code === 'Escape' && EV.Online.isOpen()) { EV.Online.hide(); EV.UI.setLockHint(true); return; }
       if (e.code === 'KeyK') {
         if (EV.Cards.which === 'build') { EV.Cards.toggleBuild(Game); Game.resume(); }
         else if (!EV.Cards.isOpen() && !EV.Inv.isOpen() && Game.player.alive) { if (EV.Cards.toggleBuild(Game)) Game.pause(); }
       }
-      if (e.code === 'Escape' && EV.Cards.which === 'build') { EV.Cards.toggleBuild(Game); EV.UI.setLockHint(true); }
+      if (e.code === 'Escape' && EV.Cards.which === 'build') { EV.Cards.toggleBuild(Game); EV.UI.setLockHint(true); return; }
       if (e.code === 'Tab') {
         e.preventDefault();
         if (EV.Inv.isOpen()) { EV.Inv.close(); Game.resume(); }
         else if (!EV.Cards.isOpen() && Game.player.alive) { EV.Inv.open(Game); Game.pause(); }
       }
-      if (e.code === 'Escape' && EV.Inv.isOpen()) { EV.Inv.close(); EV.UI.setLockHint(true); }
+      if (e.code === 'Escape' && EV.Inv.isOpen()) { EV.Inv.close(); EV.UI.setLockHint(true); return; }
+      // fare zaten serbestken Esc: pencere yoksa liderliği aç
+      if (e.code === 'Escape' && !EV.Cards.isOpen() && !EV.Inv.isOpen() && Game.player.alive &&
+          document.getElementById('deathPanel').hidden && !Game.player.aiming) {
+        Game.pause();
+        EV.Online.show(Game);
+      }
     });
   }
 
