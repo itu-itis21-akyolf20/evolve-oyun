@@ -10,7 +10,7 @@
 (function () {
   'use strict';
 
-  const MOBILE_SCRIPTS = ['mobile/bridge.js', 'mobile/controls.js'];
+  const MOBILE_SCRIPTS = ['mobile/bridge.js', 'mobile/controls.js', 'mobile/assist.js'];
   const status = document.getElementById('mBoot');
 
   function fail(msg) {

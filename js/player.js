@@ -221,10 +221,14 @@ EV.Player = (function () {
   /* =========================================================
      Temel saldırı (3'lü kombo, hedefe mıknatıslanır)
      ========================================================= */
-  /* Menzilli temel saldırı (sağ tık basılıyken sol tık): yakın dövüşün
-     ~%40'ı kadar saniyelik hasar, karşılığında güvenli mesafe. */
-  const SHOT = { mult: 0.6, cd: 0.65 };
-  function rangedBasic(game) {
+  /* Menzilli temel saldırı (sağ tık basılıyken sol tık): basılı tutunca şarj olur,
+     bırakınca atar. Hızlı tık = zayıf atış (yakın dövüşün ~%40'ı / sn);
+     tam şarj (1 sn) = ~4 kat hasar, büyük/hızlı mermi, 1 hedefi deler
+     (~%60'ı / sn). Yakın dövüş yine en güçlüsü, uzak ise güvenli. */
+  const SHOT = { mult: 0.6, maxMult: 2.5, cd: 0.65, charge: 1.0, grace: 0.12 };
+  function chargeFrac(held) { return U.clamp((held - SHOT.grace) / (SHOT.charge - SHOT.grace), 0, 1); }
+
+  function rangedBasic(game, held) {
     const P = game.player;
     const S = P.stats;
     const t = P.lockTarget && P.lockTarget.alive && !P.lockTarget.ally ? P.lockTarget : null;
@@ -233,15 +237,17 @@ EV.Player = (function () {
     P.aimYaw = Math.atan2(tp.x - pos.x, tp.z - pos.z);
     P.group.rotation.y = P.aimYaw;
     EV.Creature.attack(P.group, 0.15);
-    EV.Skills.basicShot(game, t, S.dmg * SHOT.mult);
+    const k = chargeFrac(held || 0);
+    EV.Skills.basicShot(game, t, S.dmg * U.lerp(SHOT.mult, SHOT.maxMult, k), {
+      size: 0.3 + 0.25 * k, speed: 38 + 16 * k, pierce: k >= 1 ? 1 : 0, knock: 1.5 + 6 * k,
+    });
     P.basicCd = SHOT.cd / S.atkSpd;
     P.faceT = Math.max(0.3, P.basicCd + 0.1);
     P.combo = 0;
     P.lastCombatT = game.time;
   }
 
-  function basic(game, ranged) {
-    if (ranged) return rangedBasic(game);
+  function basic(game) {
     const P = game.player;
     const S = P.stats;
     const st = game.stage();
@@ -463,7 +469,17 @@ EV.Player = (function () {
     /* --- girdiler --- */
     const canAct = !inMotion && !busy && !EV.Status.stunned(P);
     if (canAct) {
-      if (I.mouse.left && P.basicCd <= 0 && !P.aiming) basic(game, aimMode);
+      // nişan modunda sol tık şarj eder, bırakınca atar (sağ tık önce bırakılsa da atış kaybolmaz)
+      if (!P.aiming && (P.charge > 0 || (aimMode && I.mouse.left && P.basicCd <= 0))) {
+        if (I.mouse.left) {
+          const was = chargeFrac(P.charge || 0);
+          P.charge = (P.charge || 0) + dt;
+          if (was < 1 && chargeFrac(P.charge) >= 1) U.audio.blip(880, 0.08, 'triangle', 0.05);   // tam şarj sesi
+        } else {
+          rangedBasic(game, P.charge);
+          P.charge = 0;
+        }
+      } else if (I.mouse.left && P.basicCd <= 0 && !P.aiming && !aimMode) basic(game);
       if (I.hit('Space')) dash(game, wish);
 
       const slots = [0, 1, 2, 'R'];
@@ -542,5 +558,8 @@ EV.Player = (function () {
     camera.updateMatrixWorld();
   }
 
-  return { create, rebuild, update, updateCamera, cycleLock };
+  /** 0..1 şarj oranı (arayüz için). */
+  function charge(game) { const P = game.player; return P && P.charge > 0 ? chargeFrac(P.charge) : -1; }
+
+  return { create, rebuild, update, updateCamera, cycleLock, charge };
 })();

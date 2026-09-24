@@ -1,0 +1,11 @@
+const wait = async (fn, ms) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) return false; await new Promise((r) => setTimeout(r, 50)); } return true; };
+await wait(() => window.EV && EV.Game && document.getElementById('mTouch'), 15000);
+T.start('normal');
+const G = EV.Game, b = G.build;
+b.skills = [{ id: 'c_drop', rank: 1, cd: 0 }, { id: 'c_acid', rank: 1, cd: 3, cdMax: 7 }, { id: 'c_spark', rank: 1, cd: 0 }];
+b.ult = { id: 'c_u_nova', rank: 1, cd: 0 };
+EV.Build.recompute(G);
+G.player.rage = 50;
+await new Promise((r) => setTimeout(r, 400));
+const root = document.getElementById('mTouch');
+return { icons: Array.from(root.querySelectorAll('.mSkill'), (x) => x.textContent), desktopBar: document.getElementById('skillbar').textContent.slice(0, 80) };

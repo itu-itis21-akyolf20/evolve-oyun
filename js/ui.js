@@ -202,6 +202,10 @@ EV.UI = (function () {
     const t = (P.lockTarget && P.lockTarget.alive) ? P.lockTarget : (P.hover && P.hover.alive ? P.hover : null);
     el.crosshair.classList.toggle('enemy', !!P.hover && !P.hover.ally);
     el.crosshair.classList.toggle('locked', !!P.lockTarget);
+    const ch = EV.Player.charge(game);
+    el.crosshair.classList.toggle('charging', ch >= 0);
+    el.crosshair.classList.toggle('full', ch >= 1);
+    if (ch >= 0) el.crosshair.style.setProperty('--ch', ch.toFixed(2));
     if (!t || t.isAlpha || t.isMini) { el.targetFrame.hidden = true; return; }
     el.targetFrame.hidden = false;
     el.targetFrame.classList.toggle('locked', t === P.lockTarget);

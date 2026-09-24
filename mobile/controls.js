@@ -34,7 +34,8 @@
       '<button data-a="menu" title="Menü">☰</button>' +
       '<button data-a="bag" title="Çanta">🎒</button>' +
       '<button data-a="build" title="Yapı">📜</button>' +
-      '<button data-a="lock" title="Hedef">🔒</button>' +
+      '<button data-a="lock" title="Sonraki hedef">🔒</button>' +
+      '<button data-a="assist" title="Otomatik hedef" class="mAssist">🤖</button>' +
       '<button data-a="full" title="Tam ekran">⛶</button>' +
     '</div>' +
     '<div id="mBtns">' +
@@ -42,7 +43,7 @@
       '<button data-a="shoot" class="mShoot">🎯</button>' +
       '<button data-a="dash" class="mDash">💨</button>' +
       SKILL_BTNS.map((s) => '<button data-a="' + s.a + '" class="mSkill m-' + s.a + '"><span class="ic">' + s.label +
-        '</span><span class="cd"></span></button>').join('') +
+        '</span><span class="cd"></span><span class="key">' + s.label + '</span></button>').join('') +
     '</div>';
   // #app içinde: oyunun panelleri (z-index 20) her zaman dokunmatik katmanın üstünde kalır
   (document.getElementById('app') || document.body).appendChild(root);
@@ -89,6 +90,7 @@
       if (btn) {
         const a = btn.dataset.a;
         if (a === 'full') { fullscreen(); continue; }
+        if (a === 'assist') { btn.classList.toggle('off', !EV.MobileAssist.toggle()); continue; }
         btn.classList.add('on');
         touches.set(t.identifier, { kind: 'btn', action: a, btn, x: t.clientX, y: t.clientY });
         B.action(a, true);
@@ -172,7 +174,12 @@
       const sk = x.s.slot === 'R' ? b.ult : b.skills[x.s.slot];
       const def = sk && EV.DATA.skill(sk.id);
       const icon = def ? def.icon : x.s.label;
-      if (x.last !== icon) { x.ic.textContent = icon; x.last = icon; }
+      if (x.last !== icon) {
+        x.ic.textContent = icon;
+        x.last = icon;
+        // her yetenek kendi element renginde çerçevelenir: düğmeler birbirine / atılıma benzemesin
+        x.el.style.setProperty('--sk', def ? '#' + EV.Skills.tagColor(def).toString(16).padStart(6, '0') : '');
+      }
       x.el.classList.toggle('empty', !def);
       let frac = 0;
       if (def && x.s.slot === 'R') frac = 1 - Math.min(1, P.rage / rageMax);
@@ -184,4 +191,8 @@
   }
   setInterval(refresh, 120);
   refresh();
+  setTimeout(() => {
+    const ab = root.querySelector('.mAssist');
+    if (ab && EV.MobileAssist) ab.classList.toggle('off', !EV.MobileAssist.isOn());
+  }, 0);
 })();

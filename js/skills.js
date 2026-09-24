@@ -151,18 +151,19 @@ EV.Skills = (function () {
 
   /** Nişan modunda (sağ tık basılı) sol tık: kilitli hedefe ya da nişangaha tek mermi. */
   const SHOT_COLOR = [0x9de89d, 0xffc06a, 0xf0e2c8];
-  function basicShot(game, target, dmg) {
+  function basicShot(game, target, dmg, o) {
+    o = o || {};
     const pl = P(game);
-    const o = chest(game, 1.0);
+    const from = chest(game, 1.0);
     const aimAt = target ? target.group.position.clone().setY(target.group.position.y + target.group.userData.hipY) : pl.aimPoint;
-    const dir = new THREE.Vector3().subVectors(aimAt, o);
+    const dir = new THREE.Vector3().subVectors(aimAt, from);
     const flatLen = Math.hypot(dir.x, dir.z);
     if (flatLen < 0.3) dir.set(Math.sin(pl.aimYaw), 0, Math.cos(pl.aimYaw));
     else dir.y = U.clamp(dir.y / flatLen, -0.35, 0.25) * flatLen;
     dir.normalize();
     spawnProj(game, {
-      pos: o, dir, speed: 38, range: 26, size: 0.3, dmg, st: [], pow: pl.stats.dmg * pl.stats.statusPower,
-      pierce: 0, explode: 0, tick: 0, knock: 1.5, chainOnHit: 0, color: SHOT_COLOR[game.stageIndex] || 0xffffff,
+      pos: from, dir, speed: o.speed || 38, range: 26, size: o.size || 0.3, dmg, st: [], pow: pl.stats.dmg * pl.stats.statusPower,
+      pierce: o.pierce || 0, explode: 0, tick: 0, knock: o.knock || 1.5, chainOnHit: 0, color: SHOT_COLOR[game.stageIndex] || 0xffffff,
       src: 'player', basic: true,
     });
     U.audio.shoot();

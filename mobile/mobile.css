@@ -85,3 +85,8 @@ body.mobile #cardRow{gap:8px;flex-wrap:nowrap}
 body.mobile #cardRow .card{flex:1 1 0;max-width:none;font-size:12px}
 body.mobile #cardRow .cicon{font-size:26px}
 body.mobile #cardRow .cname{font-size:15px}
+
+/* yetenek düğmeleri: element rengi çerçeve + köşede tuş harfi */
+.mSkill{border-color:var(--sk,var(--m-btn-bd)) !important;border-width:3px !important}
+.mSkill .key{position:absolute;z-index:2;right:3px;bottom:1px;font-size:10px;color:#fff;opacity:.8;text-shadow:0 1px 2px #000}
+.mAssist.off{opacity:.45;filter:grayscale(1)}

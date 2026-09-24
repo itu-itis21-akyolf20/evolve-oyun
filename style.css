@@ -313,3 +313,7 @@ body.prestart #helpHint,body.prestart #echoBar,body.prestart #targetFrame{displa
 .coderow{font-size:12px;font-weight:800;margin:-6px 0 12px;opacity:.85;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
 .coderow b{font-family:monospace;font-size:13px;user-select:all;-webkit-user-select:all;background:rgba(255,255,255,.45);padding:2px 6px;border-radius:6px}
 .coderow button{margin:0 !important;padding:4px 10px !important;font-size:12px !important}
+
+/* uzak atış şarjı: nişangah büyür, dolunca sarı parlar */
+#crosshair.charging{width:calc(22px + 26px * var(--ch,0));height:calc(22px + 26px * var(--ch,0));border-color:#9fd8ff;border-width:3px}
+#crosshair.charging.full{border-color:#ffd23d;box-shadow:0 0 12px #ffd23d}

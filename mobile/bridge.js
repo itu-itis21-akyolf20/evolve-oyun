@@ -50,6 +50,7 @@ EV.MobileBridge = (function () {
 
   /** Bakış niyeti → fare kayması (oyun sadece 'kilitli' farede bakışı işler). */
   function applyLook(dx, dy) {
+    if (dx || dy) api.lastLookAt = performance.now();   // nişan yardımı bu sırada kameraya karışmaz
     const m = EV.Input.mouse;
     m.locked = true;
     m.dx += dx * LOOK_GAIN;
@@ -104,5 +105,6 @@ EV.MobileBridge = (function () {
   EV.Input.releaseLock = function () {};
   EV.Input.mouse.locked = true;
 
-  return { applyMove, applyLook, action, releaseAll };
+  const api = { applyMove, applyLook, action, releaseAll, lastLookAt: 0 };
+  return api;
 })();
