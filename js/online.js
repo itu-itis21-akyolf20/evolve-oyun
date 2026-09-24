@@ -46,7 +46,7 @@ EV.Online = (function () {
     return null;
   }
 
-  const id = (() => {
+  let id = (() => {
     let v = store('evolve_pid');
     if (!v || !/^[a-z0-9]{8,32}$/.test(v)) {
       v = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => (b % 36).toString(36)).join('');
@@ -95,6 +95,39 @@ EV.Online = (function () {
     rpc('submit_score', payload(game), true).catch(() => { /* çevrimdışı */ });
   }
 
+  /* ---------------- bulut kaydı ----------------
+     Oyun kaydı (localStorage) dakikada bir ve sekme kapanırken Supabase'e
+     yedeklenir. Kayıt kodu = oyuncu kimliği: başka bilgisayarda bu kodla
+     aynı oyuna devam edilir (liderlik kaydı da aynı kişiye bağlı kalır). */
+  let lastCloud = 0;
+  function cloudSave(data, force) {
+    if (!enabled || !data) return;
+    const now = Date.now();
+    if (!force && now - lastCloud < 60000) return;
+    lastCloud = now;
+    rpc('save_game', { p_id: id, p_data: data }, true).catch(() => { /* çevrimdışı: sonra tekrar */ });
+  }
+
+  const CODE_RE = /^[a-z0-9]{8,32}$/;
+  function cleanCode(s) { return String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+  /** Koddaki bulut kaydını getirir; yoksa null. */
+  async function cloudLoad(code) {
+    const c = cleanCode(code);
+    if (!CODE_RE.test(c)) throw new Error('Kod geçersiz');
+    const d = await rpc('load_game', { p_id: c });
+    return d && typeof d === 'object' && d.v ? d : null;
+  }
+
+  /** Bu tarayıcıyı verilen koda (kimliğe) bağlar. */
+  function adopt(code) {
+    const c = cleanCode(code);
+    if (!CODE_RE.test(c)) return false;
+    store('evolve_pid', c);
+    id = c;
+    return true;
+  }
+
   const STAGE = ['Hücre', 'Sürüngen', 'Memeli'];
 
   function row(e, i) {
@@ -132,5 +165,6 @@ EV.Online = (function () {
 
   function hide() { $('lbPanel').hidden = true; open = false; }
 
-  return { enabled, id, name, setName, cleanName, score, submit, beacon, show, hide, isOpen: () => open };
+  return { enabled, get id() { return id; }, name, setName, cleanName, score, submit, beacon, show, hide, isOpen: () => open,
+    cloudSave, cloudLoad, adopt };
 })();

@@ -30,11 +30,13 @@ EV.Enemies = (function () {
     { hp: 1.4, dmg: 1.2, size: 1.2, reward: 1.5, suffix: ' III' },
   ];
 
-  /** Oyuncu seviyesi arttıkça II ve III daha sık çıkar. */
+  /** II ve III seviye 4'ten / 7'den sonra, seviyeyle yavaşça artan seyreklikte çıkar
+   *  (Normal: en fazla %18 II, %6 III; Dehşet'te 1.6 katı). */
   function rollVariant(game) {
     const L = game.build.level;
-    const p3 = Math.min(0.2, 0.04 + 0.012 * L);
-    const p2 = Math.min(0.4, 0.22 + 0.012 * L);
+    const k = game.diff.id === 'dehset' ? 1.6 : 1;
+    const p3 = L < 7 ? 0 : Math.min(0.06, 0.01 * (L - 6)) * k;
+    const p2 = L < 4 ? 0 : Math.min(0.18, 0.04 + 0.012 * (L - 4)) * k;
     const r = Math.random();
     return r < p3 ? 3 : r < p3 + p2 ? 2 : 1;
   }

@@ -310,19 +310,21 @@ window.EV = window.EV || {};
     },
 
     /* ---------------- kayıt ---------------- */
-    save() {
+    save(forceCloud) {
       if (!this.started || !this.build) return;
       try {
         const b = this.build, P = this.player;
-        localStorage.setItem(SAVE_KEY, JSON.stringify({
+        const data = {
           v: 4, diff: this.diff.id, stageIndex: this.stageIndex, generation: this.generation,
           evo: this.evo, kills: this.kills, legacy: this.legacy, inv: EV.Items.serialize(this.inv),
           stats: { totalDmg: this.stats.totalDmg, maxHit: this.stats.maxHit }, miniDone: this.miniDone,
           build: { level: b.level, xp: b.xp, skills: b.skills.map((s) => ({ id: s.id, rank: s.rank, fused: !!s.fused })),
             ult: b.ult ? { id: b.ult.id, rank: b.ult.rank } : null, passives: b.passives, rerolls: b.rerolls, uses: b.uses, picks: b.picks,
             history: b.history.slice(-12) },
-          hp: P.hp, energy: P.energy, rage: P.rage,
-        }));
+          hp: P.hp, energy: P.energy, rage: P.rage, name: EV.Online.name(), t: Date.now(),
+        };
+        EV.Online.cloudSave(data, forceCloud);
+        localStorage.setItem(SAVE_KEY, JSON.stringify(data));
         EV.UI.savedBlink();
       } catch (err) { console.warn('Kayıt yazılamadı:', err); }
     },
@@ -467,7 +469,25 @@ window.EV = window.EV || {};
     nameIn.addEventListener('input', () => nameIn.classList.remove('bad'));
     $('lbOpen').onclick = () => EV.Online.show(null);
     $('lbClose').onclick = () => { EV.Online.hide(); if (Game.started) Game.resume(); };
-    window.addEventListener('beforeunload', () => EV.Online.beacon(Game));
+    // sekme kapanırken / arka plana geçerken son durum hem yerel hem buluta yazılır
+    window.addEventListener('beforeunload', () => { Game.save(true); EV.Online.beacon(Game); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(true); });
+    $('saveCode').textContent = EV.Online.id;
+    $('codeLoad').onclick = async () => {
+      const code = window.prompt('Kayıt kodunu gir (diğer bilgisayardaki başlangıç ekranında yazar):');
+      if (!code) return;
+      try {
+        const d = await EV.Online.cloudLoad(code);
+        if (!d) { window.alert('Bu koda ait kayıt bulunamadı.'); return; }
+        if (Game.loadRaw() && !window.confirm('Bu bilgisayardaki kayıt, koddaki kayıtla değiştirilecek. Emin misin?')) return;
+        EV.Online.adopt(code);
+        localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+        if (d.name) EV.Online.setName(d.name);
+        location.reload();
+      } catch (err) {
+        window.alert('Kayıt yüklenemedi: ' + err.message);
+      }
+    };
     const begin = (fn) => {
       if (!nameOk()) return;
       $('startPanel').hidden = true;
@@ -476,8 +496,13 @@ window.EV = window.EV || {};
       Game.started = true;
       fn();
     };
-    $('diffNormal').onclick = () => begin(() => Game.newGame('normal'));
-    $('diffDehset').onclick = () => begin(() => Game.newGame('dehset'));
+    // kayıt varken yeni oyun ona yazılır: yanlışlıkla ilerlemeyi silmesin
+    const fresh = (diff) => {
+      if (Game.loadRaw() && !window.confirm('Kayıtlı oyunun silinip yeni oyun başlayacak.\nDevam etmek için "Kayıttan Devam Et"e bas.\n\nYine de yeni oyun?')) return;
+      begin(() => Game.newGame(diff));
+    };
+    $('diffNormal').onclick = () => fresh('normal');
+    $('diffDehset').onclick = () => fresh('dehset');
     if (Game.loadRaw()) {
       $('continueBtn').hidden = false;
       $('continueBtn').onclick = () => begin(() => {

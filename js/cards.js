@@ -113,12 +113,24 @@ EV.Cards = (function () {
     const { game, cards, allowReroll } = current;
     $('cardRow').innerHTML = cards.map((c, i) => cardHtml(game, c, i)).join('');
     $('cardRow').querySelectorAll('.card').forEach((n) => {
-      n.onclick = () => pick(+n.dataset.i);
+      n.onclick = () => { if (!clickLocked()) pick(+n.dataset.i); };
     });
     const rb = $('rerollBtn');
     rb.hidden = !allowReroll;
     $('rerollN').textContent = game.build.rerolls;
     rb.disabled = game.build.rerolls <= 0;
+  }
+
+  /* Saldırırken sol tık basılıyken kart ekranı açılınca kart yanlışlıkla seçiliyordu:
+     açıldıktan sonra kısa bir süre fareyle seçim kapalı (klavye 1-2-3 serbest). */
+  const CLICK_LOCK_MS = 800;
+  let lockUntil = 0;
+  function clickLocked() { return performance.now() < lockUntil; }
+  function lockClicks(panelId) {
+    lockUntil = performance.now() + CLICK_LOCK_MS;
+    const el = $(panelId);
+    el.classList.add('clicklock');
+    setTimeout(() => el.classList.remove('clicklock'), CLICK_LOCK_MS);
   }
 
   function openLevel(game, opts) {
@@ -128,6 +140,7 @@ EV.Cards = (function () {
     $('cardPanel').hidden = false;
     open = 'level';
     renderLevel();
+    lockClicks('cardPanel');
     U.audio.levelUp();
   }
 
@@ -184,7 +197,8 @@ EV.Cards = (function () {
       onChoose(genes[i] ? genes[i].id : null);
     };
     current = { evolveDone: done, count: Math.max(1, genes.length) };
-    $('evGenes').querySelectorAll('.gene').forEach((n) => { n.onclick = () => done(+n.dataset.i); });
+    $('evGenes').querySelectorAll('.gene').forEach((n) => { n.onclick = () => { if (!clickLocked()) done(+n.dataset.i); }; });
+    lockClicks('evolvePanel');
   }
 
   /* =========================================================
@@ -246,7 +260,7 @@ EV.Cards = (function () {
       if (n != null && n < current.count) current.evolveDone(n);
     }
   });
-  $('rerollBtn').onclick = reroll;
+  $('rerollBtn').onclick = () => { if (!clickLocked()) reroll(); };
 
   return {
     openLevel, openEvolve, toggleBuild, renderBuild,

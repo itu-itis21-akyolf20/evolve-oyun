@@ -16,6 +16,13 @@
 window.T = (function () {
   'use strict';
 
+  // Testler canlı liderliğe / bulut kaydına ASLA yazmasın; tarayıcı pencereleri de bloklamasın
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (u, o) => (/supabase\.co/.test(String(u)) ? Promise.reject(new Error('test: ağ kapalı')) : realFetch(u, o));
+  window.confirm = () => true;
+  window.alert = () => {};
+  window.prompt = () => null;
+
   const G = () => EV.Game;
   const $ = (id) => document.getElementById(id);
   const stats = { deathBy: {}, deaths: 0, cards: [], genes: [], stages: [], modalLoops: 0, reactions: 0, casts: 0 };

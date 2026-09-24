@@ -91,8 +91,8 @@ EV.CFG = (function () {
   const DIFFICULTY = {
     normal: {
       id: 'normal', name: 'Normal', icon: '🌿',
-      desc: 'Uyarılar uzun, avcılar affedici. Ölünce EVO\'nun %20\'si gider.',
-      hp: 1, dmg: 1, speed: 1, windup: 1, spawn: 1, apexTimer: 1,
+      desc: 'Canavarlar daha yumuşak, uyarılar uzun, avcılar seyrek. Ölünce EVO\'nun %10\'u gider.',
+      hp: 0.85, dmg: 0.8, speed: 1, windup: 1.12, spawn: 1, apexTimer: 1.3,
       energyRegen: 1, rerolls: 3, deathEvoLoss: 0.1, deathCardLoss: false, bossHeal: 0.15,
     },
     dehset: {

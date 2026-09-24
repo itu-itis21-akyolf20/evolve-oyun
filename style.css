@@ -302,3 +302,14 @@ body.prestart #helpHint,body.prestart #echoBar,body.prestart #targetFrame{displa
 .lb td{padding:5px 8px;border-top:1px solid rgba(122,86,48,.35)}
 .lb tr.me td{background:rgba(255,210,60,.45)}
 .lb tbody tr:nth-child(1) td:first-child{color:#b8860b}
+
+/* ---------- kart ekranı: üstte, açılışta kısa tıklama kilidi ---------- */
+#cardPanel{align-items:flex-start;padding-top:max(18px,5vh)}
+.clicklock .card,.clicklock .gene,.clicklock #rerollBtn{pointer-events:none;filter:saturate(.5) brightness(.8)}
+.clicklock .cards-wrap::after,.clicklock .evolve::after{content:'';display:block;height:4px;margin:10px auto 0;width:60%;
+  border-radius:2px;background:#ffe08a;animation:clicklock .8s linear forwards}
+@keyframes clicklock{from{width:60%}to{width:0}}
+
+.coderow{font-size:12px;font-weight:800;margin:-6px 0 12px;opacity:.85;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+.coderow b{font-family:monospace;font-size:13px;user-select:all;-webkit-user-select:all;background:rgba(255,255,255,.45);padding:2px 6px;border-radius:6px}
+.coderow button{margin:0 !important;padding:4px 10px !important;font-size:12px !important}
