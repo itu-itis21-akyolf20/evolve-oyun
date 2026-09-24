@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>EVOLVE — Hücreden Memeliye</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="prestart">
+
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <!-- ===================== ÜST ORTA: EVO + BOSS ===================== -->
+  <div id="evoTop">
+    <div id="evoLabel">HÜCRE</div>
+    <div class="evobar"><i id="evoFill"></i><span id="evoText">EVO 0 / 0</span></div>
+  </div>
+  <div id="bossBanner" hidden>
+    <div class="bb-name" id="bossName">Alfa</div>
+    <div class="bb-bar"><i id="bossFill"></i><b class="tick" style="left:50%"></b><b class="tick" style="left:25%"></b></div>
+    <div class="bb-cast" id="bossCast"></div>
+  </div>
+
+  <!-- ===================== ÜST SOL: HEDEF ÇERÇEVESİ ===================== -->
+  <div id="targetFrame" hidden>
+    <div class="tf-top"><span id="tfName">—</span><span id="tfLvl">Sv 1</span></div>
+    <div class="tf-bar"><i id="tfFill"></i><span id="tfHp">0</span></div>
+    <div class="tf-st" id="tfSt"></div>
+    <div class="tf-lock" id="tfLock">🔒 KİLİTLİ</div>
+  </div>
+
+  <!-- ===================== ÜST SAĞ: DURUM ===================== -->
+  <div id="chips">
+    <div id="stageChip"><span id="stageName">Hücre</span> · <span id="diffName">Normal</span></div>
+    <div id="killChip">Avlanan: <span id="killCount">0</span> · 🧬 <span id="essCount">0</span></div>
+    <div id="scoreChip">🏆 Puan: <b id="scoreNow">0</b></div>
+    <div id="dmgChip">💥 Toplam hasar: <b id="dmgTotal">0</b></div>
+    <div id="maxChip">⚡ En büyük vuruş: <b id="dmgMax">0</b></div>
+    <div id="hideChip" hidden>👁️‍🗨️ GİZLİSİN</div>
+    <div id="herdChip" hidden><span id="herdCount">0</span> müttefik</div>
+    <div id="waveChip" hidden>Nesil <span id="waveNum">1</span></div>
+    <div id="eggChip" hidden>🥚 <span id="eggTime">2:00</span> · <span id="eggHp">0</span></div>
+    <div id="saveChip">kaydedildi</div>
+  </div>
+
+  <!-- ===================== ORTA ===================== -->
+  <div id="crosshair"><i></i></div>
+  <div id="dangerVig"></div>
+  <div id="hurtVig"></div>
+  <div id="fleeWarn" hidden>KAÇ!<span id="fleeName">Yutucu</span></div>
+  <div id="matePrompt" hidden><kbd>F</kbd> Çiftleş</div>
+  <div id="toast"></div>
+  <div id="dmgLayer"></div>
+  <div id="marker" hidden>▼</div>
+  <div id="lockHint" hidden>Oynamak için tıkla</div>
+
+  <!-- ===================== ALT ===================== -->
+  <div id="echoBar"></div>
+  <div id="skillbar"></div>
+
+  <div id="hud">
+    <div id="badge">
+      <svg viewBox="0 0 100 100" class="xpring"><circle cx="50" cy="50" r="45" class="bg"/><circle cx="50" cy="50" r="45" class="fg" id="xpRing"/></svg>
+      <div class="b-label">Seviye</div>
+      <div class="b-num" id="lvlNum">1</div>
+    </div>
+    <div id="bars">
+      <div class="bar hp"><i id="hpFill"></i><i id="shieldFill"></i><span id="hpText">100</span></div>
+      <div class="bar en"><i id="enFill"></i><span id="enText">100</span></div>
+      <div class="bar rage"><i id="rageFill"></i><span id="rageText">ÖFKE</span></div>
+      <div id="statLine"><span>⚔ <b id="dmgText">10</b></span><span>🎯 <b id="critText">5%</b></span><span>🛡 <b id="armorText">0%</b></span></div>
+    </div>
+    <div id="creatureName">Tek Hücreli</div>
+  </div>
+
+  <div id="helpHint"><kbd>Tab</kbd> çanta · <kbd>K</kbd> yapı · <kbd>L</kbd> liderlik · <kbd>T</kbd> kilit · <kbd>Esc</kbd> fare</div>
+
+  <!-- ===================== KART SEÇİMİ ===================== -->
+  <div id="cardPanel" class="overlay" hidden>
+    <div class="cards-wrap">
+      <h2 id="cardTitle">SEVİYE ATLADIN</h2>
+      <div id="cardSub">Bir kart seç (1 · 2 · 3)</div>
+      <div id="cardRow"></div>
+      <button id="rerollBtn" class="ghost">🎲 Yeniden çek (<span id="rerollN">3</span>) · 4</button>
+    </div>
+  </div>
+
+  <!-- ===================== EVRİM ===================== -->
+  <div id="evolvePanel" class="overlay" hidden>
+    <div class="panel evolve">
+      <div class="ev-glow"></div>
+      <h2 id="evTitle">EVRİM</h2>
+      <p id="evBody"></p>
+      <div class="ev-sec">Kalıcı gen seç — oyun sonuna kadar senin</div>
+      <div id="evGenes"></div>
+      <div class="ev-sec">Bedenine geçenler</div>
+      <div id="evCarry"></div>
+    </div>
+  </div>
+
+  <!-- ===================== YAPI PANELİ (K) ===================== -->
+  <div id="buildPanel" class="overlay" hidden>
+    <div class="panel build">
+      <h2>YAPI</h2>
+      <div id="buildBody"></div>
+      <button id="closeBuild">Kapat (K)</button>
+    </div>
+  </div>
+
+  <!-- ===================== ÇANTA / SANDIK (Tab) ===================== -->
+  <div id="invPanel" class="overlay" hidden>
+    <div class="panel inv">
+      <h2>ÇANTA · SANDIK <span class="ess">🧬 <b id="invEss">0</b> Gen Özü</span></h2>
+      <div class="invgrid">
+        <div class="invcol">
+          <h3>KUŞANILAN</h3><div id="invEquip"></div>
+          <h3>EŞYA BAS · <span id="invCraftCost">400</span> öz</h3><div id="invCraft"></div>
+          <div class="hint">Her avlanan yaratık gücü kadar Gen Özü verir.</div>
+        </div>
+        <div class="invcol wide">
+          <h3>ÇANTA</h3><div id="invBag" class="igrid"></div>
+          <h3>SANDIK</h3><div id="invChest" class="igrid chest"></div>
+        </div>
+        <div class="invcol" id="invDetail"></div>
+      </div>
+      <div class="hint">Tab / Esc kapat</div>
+    </div>
+  </div>
+
+  <!-- ===================== LİDERLİK (L) ===================== -->
+  <div id="lbPanel" class="overlay" hidden>
+    <div class="panel lb">
+      <h2>🏆 LİDERLİK TABLOSU</h2>
+      <div id="lbMe" class="hint"></div>
+      <div class="lbwrap"><table>
+        <thead><tr><th>#</th><th>Oyuncu</th><th>Puan</th><th>Aşama</th><th>Toplam hasar</th><th>En büyük vuruş</th><th>Av</th></tr></thead>
+        <tbody id="lbRows"></tbody>
+      </table></div>
+      <div class="hint">Puan = av × 10 + toplam hasar ÷ 50 + tamamlanan aşama × 10.000 (Dehşet ×1.5)</div>
+      <button id="lbClose">Kapat (L)</button>
+    </div>
+  </div>
+
+  <!-- ===================== ÖLÜM ===================== -->
+  <div id="deathPanel" class="overlay" hidden>
+    <div class="panel death">
+      <h2>YERE SERİLDİN</h2>
+      <p id="deathBody"></p>
+      <button id="respawn">Kalk ve Devam Et</button>
+    </div>
+  </div>
+
+  <!-- ===================== BAŞLANGIÇ ===================== -->
+  <div id="startPanel" class="overlay">
+    <div class="panel start">
+      <h1>EVOLVE</h1>
+      <div class="sub">Hücre · Sürüngen · Memeli</div>
+      <p class="intro">
+        Tek hücre olarak başla. Her seviyede 3 karttan birini seç, aşamanın
+        yeteneklerini birleştir. Evrimleşince bir <b>gen</b> seç; aldığın genler
+        sonraki bedenlerde yeni <b>füzyonlar</b> ve <b>kombolar</b> açar.
+      </p>
+      <div class="namerow">
+        <label for="nameInput">Oyuncu adın</label>
+        <input id="nameInput" maxlength="16" placeholder="en az 2 karakter" autocomplete="nickname">
+        <button id="lbOpen" class="ghost">🏆 Liderlik</button>
+      </div>
+      <div class="diffs">
+        <button id="diffNormal" class="diff"><b>🌿 Normal</b><span id="descNormal"></span></button>
+        <button id="diffDehset" class="diff dehset"><b>☠️ Dehşet</b><span id="descDehset"></span></button>
+      </div>
+      <button id="continueBtn" hidden class="ghost">Kayıttan Devam Et</button>
+      <div class="ctrls">
+        <div><kbd>W A S D</kbd> hareket · <kbd>Fare</kbd> bak/nişan · <kbd>Tekerlek</kbd> yakınlaş</div>
+        <div><kbd>Sol Tık</kbd> saldırı · <kbd>Sağ Tık</kbd> nişan modu · <kbd>Boşluk</kbd> atılım</div>
+        <div><kbd>Q</kbd> <kbd>E</kbd> <kbd>F</kbd> yetenek · <kbd>R</kbd> ultimate (öfke) · yer hedefliler: basılı tut, bırak (iptal: sağ tık)</div>
+        <div><kbd>T</kbd>/<kbd>Orta tık</kbd> hedef kilitle · <kbd>X</kbd> bırak · <kbd>Tab</kbd> çanta/sandık · <kbd>K</kbd> yapı · <kbd>F</kbd> çiftleş</div>
+        <div>Uzun otlara / yosunlara / kaya kovuklarına gir: <b>saklan</b>. Sandıklar oralarda.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/config.js"></script>
+<script src="js/data/registry.js"></script>
+<script src="js/data/cell.js"></script>
+<script src="js/data/reptile.js"></script>
+<script src="js/data/mammal.js"></script>
+<script src="js/data/fusions.js"></script>
+<script src="js/data/genes.js"></script>
+<script src="js/data/mobs.js"></script>
+<script src="js/world.js"></script>
+<script src="js/creature.js"></script>
+<script src="js/decals.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/status.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/skills.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/boss.js"></script>
+<script src="js/pickups.js"></script>
+<script src="js/items.js"></script>
+<script src="js/mating.js"></script>
+<script src="js/progression.js"></script>
+<script src="js/player.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/cards.js"></script>
+<script src="js/inv-ui.js"></script>
+<script src="js/online.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,619 @@
+/* ============================================================
+   enemies.js — yaratıklar: doğum, sürüler, yapay zekâ, yönlendirme
+
+   Davranış: passive (kaçar) · neutral (vurulunca sürüsüyle saldırır)
+             aggressive (menzile gireni kovalar) · ally (çağrı/yavru)
+   Yönlendirme: hedefe istek + engelden kaçınma + ayrışma (üst üste
+   binmesinler) + takılma algılayıcı (ilerleyemezse yan yola sapar).
+   Temel saldırı windup'lıdır: vuruş anında menzilden çıktıysan ıskalar.
+   Boss / apex / türe özgü yetenekler boss.js'dedir.
+   ============================================================ */
+window.EV = window.EV || {};
+
+EV.Enemies = (function () {
+  'use strict';
+
+  const CFG = EV.CFG;
+  const T = CFG.TUNE;
+  const U = EV.U;
+  const W = EV.World;
+  const Status = EV.Status;
+
+  let nextId = 1;
+  let packId = 1;
+
+  /* =========================================================
+     Mekânsal ızgara (her kare yeniden kurulur)
+     ========================================================= */
+  const CELL = 10;
+  const grid = new Map();
+  const key = (x, z) => Math.floor(x / CELL) * 4096 + Math.floor(z / CELL);
+
+  function rebuildGrid(game) {
+    grid.clear();
+    const list = game.enemies;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (!e.alive) continue;
+      const k = key(e.group.position.x, e.group.position.z);
+      let b = grid.get(k);
+      if (!b) { b = []; grid.set(k, b); }
+      b.push(e);
+    }
+  }
+
+  /** (x,z)'ye merkezce yakın canlılar için fn çağırır (kaba süzgeç). */
+  function forEachNear(x, z, r, fn) {
+    const x0 = Math.floor((x - r - 6) / CELL), x1 = Math.floor((x + r + 6) / CELL);
+    const z0 = Math.floor((z - r - 6) / CELL), z1 = Math.floor((z + r + 6) / CELL);
+    for (let cx = x0; cx <= x1; cx++) {
+      for (let cz = z0; cz <= z1; cz++) {
+        const b = grid.get(cx * 4096 + cz);
+        if (!b) continue;
+        for (let i = 0; i < b.length; i++) {
+          const e = b[i];
+          if (!e.alive) continue;
+          const reach = r + e.radius + e.group.userData.cap.hl + Math.abs(e.group.userData.cap.cz);
+          const dx = e.group.position.x - x, dz = e.group.position.z - z;
+          if (dx * dx + dz * dz <= reach * reach) fn(e);
+        }
+      }
+    }
+  }
+
+  function nearest(x, z, r, filter) {
+    let best = null, bd = Infinity;
+    forEachNear(x, z, r, (e) => {
+      if (filter && !filter(e)) return;
+      const d = EV.Creature.surfDist(e.group, x, z);
+      if (d < bd && d <= r) { bd = d; best = e; }
+    });
+    return best;
+  }
+
+  /* =========================================================
+     Can barı (sprite)
+     ========================================================= */
+  const BAR_H = 0.16;
+  const _cFull = new THREE.Color(0x4ade4a), _cLow = new THREE.Color(0xe8434a);
+
+  function makeBar(width, y) {
+    const g = new THREE.Group();
+    const sp = (color, op) => {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ color, depthTest: false, transparent: true, opacity: op }));
+      s.renderOrder = 998;
+      return s;
+    };
+    const bg = sp(0x120808, 0.85);
+    bg.scale.set(width, BAR_H, 1);
+    const fill = sp(0x4ade4a, 1);
+    fill.scale.set(width, BAR_H * 0.72, 1);
+    fill.renderOrder = 999;
+    g.add(bg, fill);
+    const pips = [];
+    for (let i = 0; i < 4; i++) {
+      const p = sp(0xffffff, 1);
+      p.scale.set(0.2, 0.2, 1);
+      p.position.set(-width / 2 + 0.12 + i * 0.26, 0.26, 0);
+      p.visible = false;
+      p.renderOrder = 999;
+      g.add(p);
+      pips.push(p);
+    }
+    g.position.y = y;
+    g.userData = { fill, width, pips };
+    g.visible = false;
+    return g;
+  }
+
+  const _tc = new THREE.Color();
+  function updateBar(game, e) {
+    const bar = e.hpBar;
+    const show = e.isAlpha || e.isApex || e === game.player.lockTarget || e === game.player.hover ||
+      (game.time - (e.lastHitT || -99) < 4) || (e.ally && e.hp < e.maxHp);
+    bar.visible = !!show;
+    if (!show) return;
+    const pct = U.clamp(e.hp / e.maxHp, 0, 1);
+    const { fill, width, pips } = bar.userData;
+    fill.scale.x = Math.max(0.0001, width * pct);
+    fill.position.x = -width * (1 - pct) * 0.5;
+    if (e.ally) fill.material.color.setHex(0x6fd8ff);
+    else if (e.peaceful) fill.material.color.setHex(0xff8fc0);
+    else fill.material.color.copy(_tc.copy(_cLow).lerp(_cFull, pct));
+    const sts = Status.list(e);
+    for (let i = 0; i < pips.length; i++) {
+      const s = sts[i];
+      pips[i].visible = !!s;
+      if (s) pips[i].material.color.set(s.def.color);
+    }
+  }
+
+  /* =========================================================
+     Kurulum
+     ========================================================= */
+  function statScale(game, kind) {
+    const L = game.build.level;
+    const D = game.diff;
+    const g = Math.pow(CFG.ENDLESS.enemyGrowth, game.generation);
+    if (kind === 'alpha') return { hp: D.hp * g * (1 + game.generation * 0.1), dmg: D.dmg * g };
+    // Seviye ölçeği 16'da durur: XP ölümde kaybolmadığı için zorlanan oyuncu
+    // seviye atlamaya devam ediyor, düşmanlar üstel büyüyüp onu kapana kıstırıyordu.
+    const Lc = Math.min(L, 16);
+    return {
+      hp: Math.pow(T.enemyHpLvl, Lc - 1) * D.hp * g,
+      dmg: Math.pow(T.enemyDmgLvl, Lc - 1) * D.dmg * g,
+    };
+  }
+
+  function make(game, def, opts) {
+    opts = opts || {};
+    const group = EV.Creature.build(opts.body || def.body);
+    const spot = opts.pos || W.randomSpawn(game.player.group.position, T.spawnMin, T.spawnMax);
+    group.position.set(spot.x, W.groundY(spot.x, spot.z), spot.z);
+    group.rotation.y = U.rand(0, Math.PI * 2);
+    game.scene.add(group);
+
+    const hp = opts.hp != null ? opts.hp : def.hp;
+    const e = {
+      id: nextId++, def,
+      name: opts.name || def.name,
+      lvl: opts.lvl || game.build.level,
+      maxHp: hp, hp,
+      dmg: opts.dmg != null ? opts.dmg : def.dmg,
+      speed: (def.speed || 6) * (opts.ally ? 1 : game.diff.speed),
+      armor: def.armor || 0,
+      evo: def.evo || 0, xp: def.xp != null ? def.xp : (def.evo || 0),
+      aggro: def.aggro || 14,
+      behavior: opts.ally ? 'ally' : (def.behavior || 'aggressive'),
+      atk: def.atk || { range: 1.5, windup: 0.45, cd: 1.4 },
+      group, radius: group.userData.radius,
+      alive: true, ally: !!opts.ally, isAlpha: !!opts.isAlpha, isApex: !!opts.isApex,
+      isSummon: !!opts.isSummon, isChild: false, isMate: false, peaceful: false,
+      life: opts.life || 0, pack: opts.pack || 0,
+      wander: null, wanderT: 0, atkCd: U.rand(0.3, 1.2), atkT: 0,
+      abilityCd: U.rand(2, 5), busyT: 0, aggroT: 0, fleeT: 0,
+      knock: new THREE.Vector3(), lunge: null, st: null,
+      t: U.rand(0, 100), speed01: 0, stuckT: 0, lastD: 0, detour: null, stun: 0, moving: false,
+      lastHitT: -99,
+    };
+    const barW = Math.max(1.3, Math.min(5, e.radius * 2.2));
+    e.hpBar = makeBar(barW, group.userData.cap.top + 0.7);
+    group.add(e.hpBar);
+    game.enemies.push(e);
+    return e;
+  }
+
+  function despawn(game, index) {
+    const e = game.enemies[index];
+    e.alive = false;
+    EV.Decal.cancelOwner(e);
+    game.scene.remove(e.group);
+    EV.Creature.dispose(e.group);
+    game.enemies.splice(index, 1);
+  }
+
+  function clearAll(game) {
+    for (let i = game.enemies.length - 1; i >= 0; i--) despawn(game, i);
+    grid.clear();
+  }
+
+  /* ---------------- sürüler ---------------- */
+  function unlockedTier(game, pool) {
+    const L = game.build.level;
+    return Math.min(pool.length - 1, 3 + Math.floor((L - 1) / 2));
+  }
+
+  function spawnPack(game, near) {
+    const pool = EV.MOBS.ENEMIES[game.stageIndex];
+    const maxIdx = unlockedTier(game, pool);
+    const idx = U.randInt(0, maxIdx);
+    const def = pool[Math.random() < 0.15 ? maxIdx : idx];
+    const sc = statScale(game, 'normal');
+    const n = U.randInt(def.pack[0], def.pack[1]);
+    const c = W.randomSpawn(near || game.player.group.position, T.spawnMin, T.spawnMax, 3);
+    const pid = packId++;
+    for (let i = 0; i < n; i++) {
+      const p = { x: c.x + U.rand(-4, 4), z: c.z + U.rand(-4, 4) };
+      if (W.blocked(p.x, p.z, 1)) { p.x = c.x; p.z = c.z; }
+      W.clampToPlay(p);
+      make(game, def, { pos: p, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg, pack: pid });
+    }
+  }
+
+  /** Oyuncunun çevresindeki (TUNE.nearRadius) sıradan düşman sayısı.
+   *  Eskiden tüm haritadaki sayılıyordu: uzaktakiler kotayı doldurunca
+   *  oyuncunun etrafı bomboş kalıyordu. */
+  function hostileCount(game) {
+    const p = game.player.group.position;
+    const R2 = T.despawn * T.despawn;
+    let n = 0;
+    for (let i = 0; i < game.enemies.length; i++) {
+      const e = game.enemies[i];
+      if (!e.alive || e.ally || e.isAlpha || e.isApex || e.peaceful) continue;
+      if (e.group.position.distanceToSquared(p) < R2) n++;
+    }
+    return n;
+  }
+
+  function targetCount(game) {
+    const base = Math.round(T.maxEnemies * game.diff.spawn) + Math.min(game.generation, 8);
+    return game.bossActive ? Math.round(base * 0.35) : base;
+  }
+
+  function seed(game) {
+    const target = targetCount(game);
+    let guard = 0;
+    while (hostileCount(game) < target * 0.5 && guard++ < 30) spawnPack(game);
+  }
+
+  function maintain(game, dt) {
+    const p = game.player.group.position;
+    for (let i = game.enemies.length - 1; i >= 0; i--) {
+      const e = game.enemies[i];
+      if (!e.alive || e.ally || e.isAlpha || e.isApex) continue;
+      if (e.isMate && game.player.mateTarget === e) continue;
+      if (e.group.position.distanceTo(p) > T.despawn) despawn(game, i);
+    }
+    if (hostileCount(game) < targetCount(game)) {
+      game.spawnTimer -= dt;
+      if (game.spawnTimer <= 0) {
+        spawnPack(game);
+        // eksik çoksa hızlı doldur
+        const gap = targetCount(game) - hostileCount(game);
+        game.spawnTimer = gap > 12 ? 0.15 : U.rand(0.35, 0.8);
+      }
+    }
+  }
+
+  /* ---------------- boss / apex / çağrılar ---------------- */
+  function spawnAlpha(game) {
+    const def = EV.MOBS.ALPHAS[game.stageIndex];
+    const sc = statScale(game, 'alpha');
+    const pos = W.randomSpawn(game.player.group.position, 20, 28, 4);
+    const name = game.generation > 0 ? 'Kadim ' + def.name : def.name;
+    const e = make(game, def, { pos, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg, isAlpha: true, name, lvl: game.build.level + 3 });
+    e.behavior = 'boss';
+    EV.Boss.init(game, e, def.kit);
+    game.bossActive = true;
+    game.boss = e;
+    EV.FX.ring(e.group.position, 0xff3d3d, 26, 1.2);
+    U.audio.roar();
+    return e;
+  }
+
+  function spawnApex(game) {
+    const def = EV.MOBS.APEX[game.stageIndex];
+    const sc = statScale(game, 'normal');
+    const g = game.generation;
+    const name = g > 0 ? 'Kadim ' + def.name : def.name;
+    // leash'in (55) İÇİNDE doğmalı; eskiden 50-72'de doğup ilk karede kayboluyordu
+    const pos = W.randomSpawn(game.player.group.position, 34, 48, 4);
+    const e = make(game, def, { pos, hp: def.hp * sc.hp, dmg: def.dmg * sc.dmg, isApex: true, name, lvl: game.build.level + 8 });
+    e.behavior = 'boss';
+    EV.Boss.init(game, e, def.kit);
+    game.apex = e;
+    U.audio.roar();
+    game.toast('⚠️ ' + name.toLocaleUpperCase('tr-TR') + ' AVLANIYOR<br><span class="sub">Savaşma — <b>KAÇ</b></span>', '#ff6b6b');
+    return e;
+  }
+
+  /**
+   * Apex yaşam döngüsü: gelir → en fazla def.hunt sn kovalar → vazgeçip gider.
+   * Kapalı arenada sınırsız kovalama kurtuluşu olmayan bir kovalamacaydı;
+   * şimdi kaçmak = hayatta kalıp süreyi doldurmak ya da leash dışına çıkmak.
+   */
+  function maintainApex(game, dt) {
+    const def = EV.MOBS.APEX[game.stageIndex];
+    const a = game.apex;
+    if (a && a.alive) {
+      a.huntT = (a.huntT || 0) + dt;
+      const far = a.group.position.distanceTo(game.player.group.position) > def.leash;
+      const lost = game.player.hiddenT > 3;                // saklanınca apex izini kaybeder
+      if (far || lost || a.huntT > def.hunt || game.bossActive) {
+        const i = game.enemies.indexOf(a);
+        if (i >= 0) despawn(game, i);
+        game.apex = null;
+        game.apexTimer = U.rand(def.respawn[0], def.respawn[1]) * game.diff.apexTimer;
+        if (!game.bossActive) game.toast(far || lost ? 'Avcı izini kaybetti' : a.name + ' uzaklaştı', '#9de89d');
+      }
+      return;
+    }
+    if (game.bossActive) return;
+    game.apex = null;
+    game.apexTimer -= dt;
+    if (game.apexTimer <= 0) {
+      game.apexTimer = U.rand(def.respawn[0], def.respawn[1]) * game.diff.apexTimer;
+      spawnApex(game);
+    }
+  }
+
+  const SUMMON_NAME = ['Tomurcuk', 'Kopya', 'Kurt'];
+  function spawnSummon(game, o) {
+    const P = game.player;
+    const spec = JSON.parse(JSON.stringify(P.bodySpec));
+    spec.scale *= 0.62;
+    const tint = new THREE.Color(spec.body).lerp(new THREE.Color(0x7fc8ff), 0.45);
+    spec.body = tint.getHex();
+    spec.eye = 0x9de89d;
+    const def = { id: 'summon', name: SUMMON_NAME[game.stageIndex] || 'Kopya', hp: o.hp, dmg: o.dmg,
+      speed: game.stage().base.speed * 1.05, evo: 0, xp: 0, aggro: 24, atk: { range: 1.6, windup: 0.25, cd: 0.9 }, body: spec };
+    const pos = W.randomSpawn(P.group.position, 2, 5, 1);
+    const e = make(game, def, { ally: true, life: o.dur, pos, isSummon: true });
+    EV.FX.burst(e.group.position.clone().setY(e.group.position.y + 1), 0x9de89d, 8, 5);
+    return e;
+  }
+
+  /* =========================================================
+     Hasar tepkisi
+     ========================================================= */
+  function onDamaged(game, e, src) {
+    if (e.ally || e.peaceful) return;
+    if (e.behavior === 'passive') { e.fleeT = 3.5; return; }
+    e.aggroT = 14;
+    if (e.pack) {
+      for (let i = 0; i < game.enemies.length; i++) {
+        const o = game.enemies[i];
+        if (o.pack === e.pack && o.alive && o.behavior !== 'passive') o.aggroT = Math.max(o.aggroT, 12);
+        else if (o.pack === e.pack && o.alive) o.fleeT = 3.5;
+      }
+    }
+  }
+
+  /* =========================================================
+     Yönlendirme
+     ========================================================= */
+  const _av = { x: 0, z: 0 };
+
+  /** e'yi (tx,tz)'ye doğru hareket ettirir; varınca false döner. */
+  function steer(game, e, tx, tz, spd, dt, stopAt) {
+    const pos = e.group.position;
+    let dx = tx - pos.x, dz = tz - pos.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist <= (stopAt || 0.8) || spd <= 0) return false;
+
+    // takılma: 1.2 sn boyunca mesafe kısalmıyorsa yan yola sap
+    if (e.detour) {
+      e.detour.t -= dt;
+      if (e.detour.t <= 0) e.detour = null;
+      else { dx = e.detour.x - pos.x; dz = e.detour.z - pos.z; }
+    } else {
+      e.stuckT += dt;
+      if (e.stuckT > 1.2) {
+        if (e.lastD - dist < 0.6 && dist > 4) {
+          const side = Math.random() < 0.5 ? 1 : -1;
+          const nx = -dz / dist * side, nz = dx / dist * side;
+          e.detour = { x: pos.x + nx * 6 + dx / dist * 2, z: pos.z + nz * 6 + dz / dist * 2, t: 0.9 };
+        }
+        e.stuckT = 0;
+        e.lastD = dist;
+      }
+    }
+
+    const l = Math.hypot(dx, dz) || 1;
+    let vx = dx / l, vz = dz / l;
+    W.avoid(pos.x, pos.z, vx, vz, e.radius, 2.5 + e.radius * 1.6, _av);
+    vx += _av.x;
+    vz += _av.z;
+
+    // ayrışma: aynı noktaya yığılmasınlar
+    let sx = 0, sz = 0;
+    forEachNear(pos.x, pos.z, e.radius + 2, (o) => {
+      if (o === e) return;
+      const ox = pos.x - o.group.position.x, oz = pos.z - o.group.position.z;
+      const d = Math.hypot(ox, oz);
+      const min = e.radius + o.radius;
+      if (d > 0.001 && d < min) { sx += (ox / d) * (min - d) / min; sz += (oz / d) * (min - d) / min; }
+    });
+    vx += sx * 1.4;
+    vz += sz * 1.4;
+
+    const vl = Math.hypot(vx, vz) || 1;
+    const step = Math.min(dist, spd * dt);
+    pos.x += (vx / vl) * step;
+    pos.z += (vz / vl) * step;
+    e.group.rotation.y = U.approachAngle(e.group.rotation.y, Math.atan2(vx, vz), dt * 7);
+    return true;
+  }
+
+  /* =========================================================
+     Hedef seçimi (düşmanlar için)
+     ========================================================= */
+  function pickHostileTarget(game, e) {
+    const P = game.player;
+    const pos = e.group.position;
+    const dP = P.alive ? EV.Creature.surfDist(e.group, P.group.position.x, P.group.position.z) : Infinity;
+    const egg = EV.Mating.activeEgg();
+    const dE = egg ? pos.distanceTo(egg.group.position) : Infinity;
+    let ally = null, dA = Infinity;
+    forEachNear(pos.x, pos.z, e.aggro, (o) => {
+      if (!o.ally) return;
+      const d = pos.distanceTo(o.group.position);
+      if (d < dA) { dA = d; ally = o; }
+    });
+
+    // oyuncu saklanma yerindeyse görüş 4 birime iner ve öfke çabuk söner
+    const hidden = P.hidden;
+    if (hidden && dP > 4) e.aggroT = 0;
+    const sight = hidden ? 4 : e.aggro;
+    const chasing = (e.behavior === 'aggressive' || e.behavior === 'ranged') ? (dP < sight || e.aggroT > 0) : e.aggroT > 0;
+    if (!chasing && !(egg && dE < 14 && e.behavior === 'aggressive')) return null;
+
+    if (egg && dE < EV.Mating.M.eggAggro && dE + 8 < dP) return egg;
+    if (ally && dA + 4 < dP) return ally;
+    if (P.alive && (dP < (hidden ? 4 : e.aggro * 1.6) || e.aggroT > 0)) return P;
+    return null;
+  }
+
+  function pickAllyTarget(game, e) {
+    const P = game.player.group.position;
+    const pos = e.group.position;
+    if (pos.distanceTo(P) > 22) return null;          // oyuncudan kopma
+    return nearest(pos.x, pos.z, 18, (o) => !o.ally && !o.peaceful);
+  }
+
+  /* =========================================================
+     Güncelleme
+     ========================================================= */
+  function update(game, dt) {
+    rebuildGrid(game);
+    const P = game.player;
+    const ppos = P.group.position;
+    const windMul = game.diff.windup;
+
+    for (let i = game.enemies.length - 1; i >= 0; i--) {
+      const e = game.enemies[i];
+      if (!e.alive) continue;
+      e.t += dt;
+      const pos = e.group.position;
+      const far = pos.distanceTo(ppos) > 75;
+
+      if (e.ally) {
+        e.life -= dt;
+        if (e.life <= 0) { EV.FX.burst(pos.clone().setY(pos.y + 1), 0x9de89d, 6, 5); despawn(game, i); continue; }
+      }
+
+      if (e.st) { Status.tick(game, e, dt); if (!e.alive) continue; }
+      if (e.stun > 0) e.stun -= dt;           // eş ritüeli gibi harici bekletmeler
+      if (e.atkCd > 0) e.atkCd -= dt;
+      if (e.abilityCd > 0) e.abilityCd -= dt;
+      if (e.aggroT > 0) e.aggroT -= dt;
+      if (e.fleeT > 0) e.fleeT -= dt;
+
+      let moving = 0;
+      const smul = Status.speedMul(e);
+      const disabled = smul === 0 || e.stun > 0;
+
+      // geri tepme ve atılma her şeyden önce
+      if (e.knock.lengthSq() > 0.01) {
+        pos.addScaledVector(e.knock, dt);
+        e.knock.multiplyScalar(Math.max(0, 1 - dt * 6));
+      }
+      if (e.lunge) {
+        pos.x += e.lunge.vx * dt;
+        pos.z += e.lunge.vz * dt;
+        e.lunge.t -= dt;
+        moving = 1;
+        if (e.lunge.t <= 0) e.lunge = null;
+      }
+
+      if (e.behavior === 'boss') {
+        if (!disabled && !e.lunge) moving = EV.Boss.update(game, e, dt, smul) ? 1 : 0;
+      } else if (!disabled && !e.lunge) {
+        if (e.busyT > 0) {
+          e.busyT -= dt;
+        } else if (Status.feared(e) && !e.ally) {
+          const dx = pos.x - ppos.x, dz = pos.z - ppos.z, l = Math.hypot(dx, dz) || 1;
+          moving = steer(game, e, pos.x + dx / l * 8, pos.z + dz / l * 8, e.speed * 0.9 * smul, dt) ? 1 : 0;
+        } else if (e.atkT > 0) {
+          e.atkT -= dt;
+          if (e.atkT <= 0) resolveAttack(game, e);
+        } else {
+          moving = think(game, e, dt, smul, windMul) ? 1 : 0;
+        }
+      }
+
+      W.resolveCollision(pos, e.radius);
+      pos.y = W.groundY(pos.x, pos.z);
+      e.moving = moving > 0;
+      e.speed01 = U.lerp(e.speed01, moving, Math.min(1, dt * 8));
+      if (!far || (e.t * 10 | 0) % 3 === 0) EV.Creature.animate(e.group, far ? dt * 3 : dt, e.speed01, e.t);
+      updateBar(game, e);
+    }
+  }
+
+  /** Normal yaratık ve müttefik karar döngüsü; hareket ettiyse true. */
+  function think(game, e, dt, smul, windMul) {
+    const pos = e.group.position;
+    const P = game.player;
+
+    if (e.peaceful) return wander(game, e, dt, smul);
+
+    if (e.behavior === 'passive') {
+      const d = pos.distanceTo(P.group.position);
+      if (e.fleeT > 0 || d < 5) {
+        const dx = pos.x - P.group.position.x, dz = pos.z - P.group.position.z, l = Math.hypot(dx, dz) || 1;
+        return steer(game, e, pos.x + dx / l * 10, pos.z + dz / l * 10, e.speed * 1.1 * smul, dt);
+      }
+      return wander(game, e, dt, smul);
+    }
+
+    const target = e.ally ? pickAllyTarget(game, e) : pickHostileTarget(game, e);
+    if (!target) {
+      if (e.ally) return steer(game, e, P.group.position.x, P.group.position.z, e.speed * smul, dt, 4);
+      return wander(game, e, dt, smul);
+    }
+
+    // hedefle aramızdaki yüzeyden yüzeye mesafe
+    const tp = target.group.position;
+    let surf;
+    if (target === P) surf = EV.Creature.surfDist(e.group, tp.x, tp.z) - P.radius;
+    else if (target.isEgg) surf = EV.Creature.surfDist(e.group, tp.x, tp.z) - target.radius;
+    else surf = EV.Creature.surfDist(target.group, pos.x, pos.z) - e.radius;
+
+    // türe özgü yetenek
+    if (!e.ally && target === P && e.def.ability && e.abilityCd <= 0 && EV.Boss.species(game, e, surf)) return false;
+
+    // uzakçı: tercih ettiği mesafeyi korur, çok yaklaşılırsa geri çekilir
+    if (e.behavior === 'ranged' && target === P && surf > e.atk.range) {
+      const pref = e.def.range || 12;
+      const dx = pos.x - tp.x, dz = pos.z - tp.z, l = Math.hypot(dx, dz) || 1;
+      e.group.rotation.y = U.approachAngle(e.group.rotation.y, Math.atan2(-dx, -dz), dt * 8);
+      if (surf < pref * 0.6) return steer(game, e, pos.x + dx / l * 6, pos.z + dz / l * 6, e.speed * smul, dt, 0.5);
+      if (surf > pref * 1.2) return steer(game, e, tp.x, tp.z, e.speed * smul, dt, pref);
+      e.strafe = e.strafe || (Math.random() < 0.5 ? 1 : -1);
+      if (Math.random() < dt * 0.4) e.strafe = -e.strafe;
+      return steer(game, e, pos.x - dz / l * 4 * e.strafe, pos.z + dx / l * 4 * e.strafe, e.speed * 0.6 * smul, dt, 0.5);
+    }
+
+    if (surf <= e.atk.range) {
+      e.group.rotation.y = U.approachAngle(e.group.rotation.y, Math.atan2(tp.x - pos.x, tp.z - pos.z), dt * 10);
+      if (e.atkCd <= 0) {
+        e.atkT = e.atk.windup * (e.ally ? 1 : windMul);
+        e.atkTarget = target;
+        e.atkCd = e.atk.cd;
+      }
+      return false;
+    }
+    return steer(game, e, tp.x, tp.z, e.speed * smul, dt, 0.2);
+  }
+
+  function resolveAttack(game, e) {
+    const t = e.atkTarget;
+    e.atkTarget = null;
+    if (!t) return;
+    EV.Creature.attack(e.group, 0.25);
+    const pos = e.group.position;
+    const P = game.player;
+    if (t === P) {
+      if (!P.alive) return;
+      const surf = EV.Creature.surfDist(e.group, P.group.position.x, P.group.position.z) - P.radius;
+      if (surf <= e.atk.range + 0.6) EV.Combat.hitPlayer(game, e.dmg, { attacker: e, melee: true });
+    } else if (t.isEgg) {
+      if (t.alive && pos.distanceTo(t.group.position) <= e.radius + t.radius + e.atk.range + 0.8) EV.Mating.damageEgg(game, t, e.dmg);
+    } else if (t.alive) {
+      const surf = EV.Creature.surfDist(t.group, pos.x, pos.z) - e.radius;
+      if (surf <= e.atk.range + 0.6) {
+        EV.Combat.hitEnemy(game, t, e.dmg, { source: e.ally ? 'ally' : 'enemy', knock: 3, from: pos });
+      }
+    }
+  }
+
+  function wander(game, e, dt, smul) {
+    const pos = e.group.position;
+    e.wanderT -= dt;
+    if (!e.wander || e.wanderT <= 0 || pos.distanceTo(e.wander) < 1.2) {
+      let s = W.randomSpawn(pos, 6, 18, e.radius);
+      const cv = game.player.hidden ? game.player.cover : null;
+      for (let k = 0; cv && k < 6 && Math.hypot(s.x - cv.x, s.z - cv.z) < cv.r + 4; k++) s = W.randomSpawn(pos, 6, 18, e.radius);
+      e.wander = new THREE.Vector3(s.x, 0, s.z);
+      e.wanderT = U.rand(3, 7);
+    }
+    return steer(game, e, e.wander.x, e.wander.z, e.speed * 0.42 * smul, dt, 1);
+  }
+
+  return {
+    make, despawn, clearAll, seed, maintain, update, spawnPack,
+    spawnAlpha, spawnApex, maintainApex, spawnSummon, onDamaged, steer,
+    forEachNear, nearest, statScale, rebuildGrid,
+  };
+})();

@@ -1,0 +1,304 @@
+/* ============ EVOLVE — arayüz ============ */
+:root{
+  --ink:#2c1b0c; --panel1:#e6c795; --panel2:#bf9058; --edge:#3e2a16;
+  --hp:#e8434a; --hp-d:#7d1418; --en:#3fa9f5; --en-d:#0f4f86; --rage:#ff8a2a; --rage-d:#8a3a08;
+  --evo:#ffd23d; --gold:#ffc63d;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+/* Panellerin display:flex kuralı [hidden]'ı ezmesin */
+[hidden]{display:none !important}
+html,body{height:100%;overflow:hidden;background:#0c0c10;
+  font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;-webkit-user-select:none;user-select:none;color:#fff}
+#app{position:fixed;inset:0}
+#scene{position:absolute;inset:0;display:block;width:100%;height:100%}
+kbd{display:inline-block;background:#3e2a16;color:#f2e2c8;border-radius:5px;padding:1px 6px;
+  font-size:11px;font-weight:800;margin:0 1px;box-shadow:0 2px 0 rgba(0,0,0,.35);font-family:inherit}
+.sub{font-size:13px;opacity:.9}
+
+/* HUD katmanları tıklama yutmasın: kilit koptuğunda tıklama canvas'a ulaşmalı */
+#evoTop,#bossBanner,#targetFrame,#chips,#crosshair,#dangerVig,#hurtVig,#fleeWarn,#matePrompt,
+#toast,#dmgLayer,#marker,#lockHint,#echoBar,#skillbar,#hud,#helpHint{pointer-events:none}
+
+/* ---------- EVO (üst orta) ---------- */
+#evoTop{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:min(520px,70vw);z-index:5;text-align:center}
+#evoLabel{font-size:12px;font-weight:900;letter-spacing:4px;color:#ffe08a;text-shadow:0 2px 0 #000;margin-bottom:3px}
+.evobar{position:relative;height:14px;border:2px solid rgba(0,0,0,.7);border-radius:8px;background:rgba(30,20,5,.7);overflow:hidden}
+.evobar i{position:absolute;inset:0;width:0;background:linear-gradient(180deg,#fff0a0,var(--evo) 60%,#a67c00);transition:width .25s}
+.evobar span{position:absolute;inset:0;font-size:10px;font-weight:900;line-height:10px;text-shadow:0 1px 0 #000}
+
+/* ---------- boss ---------- */
+#bossBanner{position:absolute;top:46px;left:50%;transform:translateX(-50%);width:min(460px,72vw);text-align:center;z-index:6}
+.bb-name{font-size:19px;font-weight:900;text-shadow:0 2px 0 #000,0 0 14px #ff5a5a;margin-bottom:4px}
+.bb-bar{position:relative;height:16px;border:3px solid #1a0b0b;border-radius:9px;background:#3a1010;overflow:hidden}
+.bb-bar i{display:block;height:100%;width:100%;background:linear-gradient(180deg,#ff8080,#d31f28 60%,#8d0f14);transition:width .15s}
+.bb-bar .tick{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.55)}
+.bb-cast{height:20px;margin-top:4px;font-size:14px;font-weight:900;color:#ffb0a0;text-shadow:0 2px 0 #000;letter-spacing:1px}
+
+/* ---------- hedef çerçevesi ---------- */
+#targetFrame{position:absolute;top:12px;left:12px;width:250px;z-index:6;background:rgba(20,12,8,.72);
+  border:2px solid rgba(0,0,0,.6);border-radius:10px;padding:8px 10px}
+.tf-top{display:flex;justify-content:space-between;font-size:14px;font-weight:900;text-shadow:0 1px 0 #000}
+#tfLvl{color:#ffd9a0;font-size:12px}
+.tf-bar{position:relative;height:14px;margin-top:5px;border:2px solid #1a0b0b;border-radius:7px;background:#3a1010;overflow:hidden}
+.tf-bar i{position:absolute;inset:0;width:100%;background:linear-gradient(180deg,#8df08d,#3aa83a);transition:width .15s}
+.tf-bar span{position:absolute;inset:0;font-size:10px;font-weight:900;text-align:center;line-height:10px;text-shadow:0 1px 0 #000}
+.tf-st{display:flex;gap:4px;margin-top:5px;min-height:18px;flex-wrap:wrap}
+.tf-st i{font-style:normal;font-size:11px;font-weight:900;padding:1px 5px;border-radius:5px;background:rgba(0,0,0,.5);border:1px solid var(--c);color:var(--c)}
+.tf-lock{margin-top:4px;font-size:10px;font-weight:900;color:#ff9c9c;letter-spacing:2px;display:none}
+#targetFrame.locked{border-color:#ff5a5a}
+#targetFrame.locked .tf-lock{display:block}
+
+/* ---------- sağ üst ---------- */
+#chips{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;z-index:5}
+#chips>div{background:rgba(20,14,8,.62);border:2px solid rgba(0,0,0,.5);border-radius:8px;padding:4px 10px;
+  font-size:12px;font-weight:700;text-shadow:0 1px 0 rgba(0,0,0,.6)}
+#stageChip{color:#ffe08a}#hideChip{color:#9dffb0;border-color:#3a8a4a !important}#killChip{color:#ffd9a0}#herdChip{color:#9de89d}#waveChip{color:#f0a7ff}#eggChip{color:#ffd8ea}
+#saveChip{opacity:0;transition:opacity .4s;color:#8fe38f;font-size:11px}
+#saveChip.show{opacity:1}
+
+/* ---------- nişangah ---------- */
+#crosshair{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%);z-index:6;
+  border:2px solid rgba(255,255,255,.75);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+#crosshair i{position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:#fff}
+#crosshair.enemy{border-color:#ff5a5a}#crosshair.enemy i{background:#ff5a5a}
+#crosshair.locked{border-color:#ffd23d;width:28px;height:28px}
+
+/* ---------- vinyetler ---------- */
+#dangerVig,#hurtVig{position:absolute;inset:0;z-index:3;opacity:0;transition:opacity .25s}
+#dangerVig{background:radial-gradient(ellipse at center,transparent 38%,rgba(150,0,0,.28) 72%,rgba(110,0,0,.72) 100%)}
+#hurtVig{background:radial-gradient(ellipse at center,transparent 50%,rgba(255,0,0,.45) 100%);transition:opacity .08s}
+#fleeWarn{position:absolute;left:50%;top:13%;transform:translateX(-50%);z-index:7;text-align:center;font-size:42px;
+  font-weight:900;letter-spacing:8px;color:#ff5a5a;text-shadow:0 3px 0 #000,0 0 22px rgba(255,40,40,.9);animation:pulse 1s ease-in-out infinite}
+#fleeWarn span{display:block;font-size:14px;letter-spacing:3px;color:#ffd0d0}
+@keyframes pulse{0%,100%{opacity:.8}50%{opacity:1}}
+#matePrompt{position:absolute;left:50%;bottom:210px;transform:translateX(-50%);z-index:6;background:rgba(20,8,16,.72);
+  border:2px solid rgba(255,143,192,.75);border-radius:10px;padding:6px 14px;font-size:14px;font-weight:800;color:#ffd8ea;animation:pulse 1.4s infinite}
+
+/* ---------- bildirim / sayılar ---------- */
+#toast{position:absolute;top:24%;left:50%;transform:translateX(-50%);font-size:19px;font-weight:900;text-shadow:0 2px 0 #000;
+  opacity:0;transition:opacity .3s,transform .3s;z-index:7;text-align:center;line-height:1.35}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+#dmgLayer{position:absolute;inset:0;z-index:4;overflow:hidden}
+.dmg{position:absolute;font-weight:900;font-size:15px;text-shadow:0 2px 0 #000;animation:fly .9s ease-out forwards;white-space:nowrap}
+.dmg.crit{font-size:22px;color:#ffd83d}
+.dmg.dot{font-size:11px;color:#c8f08c;opacity:.85}
+.dmg.shock{color:#8fdcff}
+.dmg.react{font-size:18px;color:#ffae5a}
+.dmg.ally{font-size:12px;color:#9fd8ff}
+.dmg.reflect{font-size:12px;color:#b0ffb0}
+.dmg.evo{color:#ffe08a;font-size:12px}
+.dmg.hurt{color:#ff6b6b;font-size:17px}
+.dmg.hurtdot{color:#ff9b9b;font-size:12px}
+.dmg.shield{color:#9fe0ff;font-size:13px}
+.dmg.heal{color:#7df07d}
+.float{position:absolute;font-weight:900;font-size:22px;letter-spacing:2px;text-shadow:0 3px 0 #000,0 0 12px currentColor;
+  animation:floatUp 1.3s ease-out forwards;white-space:nowrap;transform:translateX(-50%)}
+@keyframes fly{0%{opacity:1;transform:translateY(0) scale(.7)}25%{transform:translateY(-14px) scale(1.12)}100%{opacity:0;transform:translateY(-52px)}}
+@keyframes floatUp{0%{opacity:0;margin-top:10px}15%{opacity:1;margin-top:0}100%{opacity:0;margin-top:-50px}}
+#marker{position:absolute;color:#ff5a5a;font-size:24px;font-weight:900;text-shadow:0 0 8px #000;z-index:4;transform:translate(-50%,-50%)}
+#lockHint{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);font-size:15px;font-weight:800;z-index:8;
+  background:rgba(0,0,0,.5);padding:10px 20px;border-radius:10px}
+
+/* ---------- yetenek çubuğu ---------- */
+#skillbar{position:absolute;left:50%;bottom:128px;transform:translateX(-50%);display:flex;gap:7px;z-index:5}
+.sl{width:58px;height:58px;border-radius:12px;position:relative;overflow:hidden;background:linear-gradient(180deg,#463322,#241a11);
+  border:3px solid #120b06;box-shadow:0 3px 0 rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform .08s}
+.sl .gl{font-size:24px;line-height:1;filter:drop-shadow(0 2px 0 rgba(0,0,0,.6))}
+.sl .kb{position:absolute;top:2px;left:4px;font-size:10px;font-weight:900;opacity:.9}
+.sl .cost{position:absolute;bottom:2px;right:4px;font-size:10px;font-weight:900;color:#8fd0ff}
+.sl .pips{position:absolute;bottom:3px;left:4px;display:flex;gap:1px}
+.sl .pips i{width:4px;height:4px;border-radius:1px;background:rgba(255,255,255,.25)}
+.sl .pips i.on{background:#ffd23d}
+.sl .cd{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.66);height:0}
+.sl .cdn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;text-shadow:0 2px 0 #000}
+.sl.empty{opacity:.35}
+.sl.noen{box-shadow:inset 0 0 0 40px rgba(20,60,120,.45)}
+.sl.ult{border-color:#5a2a06}
+.sl.ult.ready{border-color:#ff8a2a;box-shadow:0 0 14px #ff8a2a,0 3px 0 rgba(0,0,0,.5);animation:pulse 1s infinite}
+.sl.fused{border-color:#b08a10}
+.sl.fire{transform:scale(.9)}
+.sl.bad{animation:shake .25s}
+@keyframes shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.sl.basic{width:50px;height:50px;align-self:flex-end}
+.sl.dashs{width:50px;height:50px;align-self:flex-end}
+
+#echoBar{position:absolute;left:50%;bottom:192px;transform:translateX(-50%);display:flex;gap:5px;z-index:5}
+.echo{font-size:14px;background:rgba(40,20,60,.7);border:1px solid #b07bff;border-radius:6px;padding:1px 5px;opacity:.8}
+.echo.fire{opacity:1;box-shadow:0 0 10px #b07bff}
+
+/* ---------- ana HUD ---------- */
+#hud{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:min(560px,94vw);height:108px;z-index:5;
+  background:linear-gradient(180deg,var(--panel1),#c49a63);border:4px solid var(--edge);border-radius:22px;
+  box-shadow:0 5px 0 rgba(0,0,0,.45),inset 0 2px 0 rgba(255,255,255,.35);display:flex;align-items:center;padding:0 14px 0 8px;gap:12px}
+#badge{position:relative;width:88px;height:88px;flex:0 0 88px;border-radius:50%;
+  background:radial-gradient(circle at 34% 28%,#f0d5a6,#b9834a 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#3a2410}
+.xpring{position:absolute;inset:-4px;width:96px;height:96px;transform:rotate(-90deg)}
+.xpring circle{fill:none;stroke-width:7}
+.xpring .bg{stroke:#3e2a16}
+.xpring .fg{stroke:#7dff8a;stroke-dasharray:283;stroke-dashoffset:283;transition:stroke-dashoffset .2s}
+.b-label{font-size:11px;font-weight:900;margin-bottom:-3px}
+.b-num{font-size:30px;font-weight:900;line-height:1}
+#bars{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.bar{position:relative;border:3px solid #34210f;border-radius:12px;overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
+.bar.hp{height:24px;background:#4a1114}
+.bar.en{height:18px;background:#0e2a44}
+.bar.rage{height:12px;background:#3a1a06;border-width:2px}
+.bar i{position:absolute;top:0;bottom:0;left:0;width:0;transition:width .12s}
+.bar.hp #hpFill{background:linear-gradient(180deg,#ff9296,var(--hp) 55%,var(--hp-d))}
+.bar.hp #shieldFill{background:linear-gradient(180deg,rgba(200,240,255,.85),rgba(120,200,255,.7));mix-blend-mode:screen}
+.bar.en i{background:linear-gradient(180deg,#9fd8ff,var(--en) 55%,var(--en-d))}
+.bar.rage i{background:linear-gradient(180deg,#ffd0a0,var(--rage) 55%,var(--rage-d))}
+.bar.rage.full i{background:linear-gradient(90deg,#ff8a2a,#ffd23d,#ff8a2a);background-size:200% 100%;animation:shine 1s linear infinite}
+@keyframes shine{to{background-position:200% 0}}
+.bar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;text-shadow:0 2px 0 rgba(0,0,0,.65)}
+.bar.rage span{font-size:9px;letter-spacing:2px}
+#statLine{display:flex;gap:14px;font-size:13px;font-weight:900;color:#f6efe0;text-shadow:0 2px 0 rgba(0,0,0,.6);padding-left:2px}
+#creatureName{position:absolute;left:16px;top:-21px;font-size:13px;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.75)}
+#helpHint{position:absolute;left:12px;bottom:12px;font-size:11px;opacity:.75;z-index:4;text-shadow:0 1px 0 #000}
+
+/* ---------- paneller ---------- */
+.overlay{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(6,4,2,.72);padding:18px}
+.panel{background:linear-gradient(180deg,var(--panel1),var(--panel2));border:5px solid var(--edge);border-radius:20px;padding:22px;
+  width:min(760px,96vw);max-height:92vh;overflow:auto;color:var(--ink);box-shadow:0 10px 0 rgba(0,0,0,.4)}
+.panel h1{font-size:52px;letter-spacing:7px;text-align:center;color:#3a2410}
+.panel h2{font-size:24px;letter-spacing:3px;text-align:center;margin-bottom:10px;color:#3a2410}
+.panel p{text-align:center;line-height:1.55;font-size:14px;margin-bottom:12px}
+.panel button,.cards-wrap button{display:block;margin:12px auto 0;padding:11px 30px;font-size:16px;font-weight:900;letter-spacing:1px;cursor:pointer;
+  color:#fff;border:4px solid #23486b;border-radius:14px;background:linear-gradient(180deg,#5aa9e6,#2c6ea8);box-shadow:0 4px 0 #1b4368;font-family:inherit}
+button:active{transform:translateY(3px)}
+button.ghost{background:linear-gradient(180deg,#b6a58c,#8a7a63);border-color:#4a3c28;box-shadow:0 4px 0 #4a3c28}
+button:disabled{opacity:.4;cursor:not-allowed}
+.start .sub{text-align:center;font-size:15px;letter-spacing:4px;color:#5b3d1e;font-weight:800;margin:-4px 0 12px}
+.diffs{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.diffs .diff{flex:1 1 240px;margin:0;display:flex;flex-direction:column;gap:6px;text-align:left;padding:14px 16px}
+.diffs .diff b{font-size:20px}
+.diffs .diff span{font-size:12px;font-weight:700;line-height:1.35;letter-spacing:0;opacity:.95}
+.diffs .dehset{background:linear-gradient(180deg,#b04a4a,#6d1f1f);border-color:#3a0e0e;box-shadow:0 4px 0 #3a0e0e}
+.ctrls{display:flex;flex-direction:column;gap:5px;align-items:center;font-size:12px;margin:16px 0 0;color:#3d2913;font-weight:700;text-align:center}
+
+/* ---------- kartlar ---------- */
+.cards-wrap{width:min(900px,96vw);text-align:center}
+.cards-wrap h2{font-size:30px;letter-spacing:4px;text-shadow:0 3px 0 #000;color:#ffe08a}
+#cardSub{font-size:14px;font-weight:700;margin:4px 0 16px;opacity:.9}
+#cardRow{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.card{position:relative;flex:1 1 240px;max-width:280px;min-height:300px;cursor:pointer;text-align:left;padding:16px 14px 14px;border-radius:16px;
+  background:linear-gradient(180deg,#2b2233,#17121c);border:3px solid var(--c,#888);box-shadow:0 6px 0 rgba(0,0,0,.5),0 0 22px -6px var(--c,#888);
+  transition:transform .12s,box-shadow .12s;display:flex;flex-direction:column;gap:8px;color:#fff}
+.card:hover{transform:translateY(-6px);box-shadow:0 10px 0 rgba(0,0,0,.5),0 0 30px -2px var(--c,#888)}
+.card .ck{position:absolute;top:8px;right:10px;font-size:12px;font-weight:900;opacity:.7}
+.card .ctype{font-size:11px;font-weight:900;letter-spacing:2px;color:var(--c)}
+.card .cicon{font-size:40px;line-height:1}
+.card .cname{font-size:19px;font-weight:900}
+.card .cpips{display:flex;gap:3px}
+.card .cpips i{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.18)}
+.card .cpips i.on{background:var(--c)}
+.card .cpips i.new{background:#fff;box-shadow:0 0 6px #fff}
+.card .cdesc{font-size:13px;line-height:1.4;color:#e8e0f0}
+.card .crank{font-size:13px;font-weight:900;color:#ffe08a}
+.card .cmeta{font-size:11px;opacity:.75;margin-top:auto}
+.card .ctags{display:flex;gap:4px;flex-wrap:wrap}
+.tag{font-style:normal;font-size:10px;font-weight:900;padding:1px 6px;border-radius:6px;border:1px solid var(--c);color:var(--c);background:rgba(0,0,0,.35)}
+.card.fusion{background:linear-gradient(180deg,#4a3a10,#1c1508);animation:glow 1.4s ease-in-out infinite}
+@keyframes glow{50%{box-shadow:0 6px 0 rgba(0,0,0,.5),0 0 40px 4px #ffd23d}}
+
+/* ---------- evrim ---------- */
+.evolve{position:relative;overflow:hidden;background:linear-gradient(180deg,#f4e0b6,#d3a869)}
+.ev-glow{position:absolute;inset:-40%;pointer-events:none;background:radial-gradient(circle,rgba(255,225,140,.7),transparent 62%);animation:pulse 2.4s infinite}
+.evolve h2{font-size:30px;position:relative}
+.ev-sec{position:relative;text-align:center;font-weight:900;font-size:13px;letter-spacing:2px;margin:12px 0 8px;color:#5b3d1e}
+#evGenes{position:relative;display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.gene{flex:1 1 200px;max-width:230px;cursor:pointer;border-radius:14px;padding:12px;border:3px solid #6b4a28;background:rgba(255,255,255,.4);
+  text-align:left;transition:transform .1s;display:flex;flex-direction:column;gap:5px}
+.gene:hover{transform:translateY(-4px);background:rgba(255,255,255,.65)}
+.gene .gi{font-size:30px}.gene .gn{font-weight:900;font-size:16px}.gene .gd{font-size:12px;line-height:1.35}
+.gene .gf{font-size:11px;font-weight:800;color:#8a5a00}
+#evCarry{position:relative;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.carry{background:rgba(255,255,255,.4);border:2px solid #7a5630;border-radius:9px;padding:6px 10px;font-size:13px;font-weight:700}
+
+/* ---------- yapı paneli ---------- */
+.build h3{font-size:14px;letter-spacing:2px;margin:12px 0 6px;color:#5b3d1e}
+.brow{display:flex;gap:8px;flex-wrap:wrap}
+.bitem{background:rgba(255,255,255,.4);border:2px solid #7a5630;border-radius:9px;padding:6px 10px;font-size:12px;font-weight:700;max-width:340px}
+.bitem b{font-size:13px}
+.bitem.muted{opacity:.55}
+.death{background:linear-gradient(180deg,#d8a3a3,#9c5a5a)}
+
+@media (max-width:620px){
+  #hud{height:92px}#badge{width:70px;height:70px;flex-basis:70px}.xpring{width:78px;height:78px}
+  .b-num{font-size:24px}.sl{width:46px;height:46px}.sl.basic,.sl.dashs{width:40px;height:40px}
+  #skillbar{bottom:112px}#echoBar{bottom:166px}#targetFrame{width:180px}
+  #creatureName{font-size:11px;top:-18px}
+}
+
+/* ---------- çanta / sandık ---------- */
+.inv{width:min(1100px,97vw)}
+.inv h2 .ess{font-size:15px;letter-spacing:1px;margin-left:12px;color:#2c6e2c}
+.inv h3{font-size:12px;letter-spacing:2px;margin:10px 0 6px;color:#5b3d1e}
+.invgrid{display:grid;grid-template-columns:190px 1fr 250px;gap:14px;align-items:start}
+.inv{max-height:94vh}
+#invDetail{position:sticky;top:0}
+.invcol{min-width:0}
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,42px);gap:5px}
+.icell{position:relative;width:42px;height:42px;border-radius:8px;background:rgba(40,25,10,.55);border:3px solid var(--c,#6b4a28);
+  display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;box-shadow:inset 0 0 12px -4px var(--c,transparent)}
+.icell.empty{border-color:rgba(107,74,40,.45);opacity:.6;font-size:16px}
+.icell.sel{outline:3px solid #fff;outline-offset:1px}
+.icell .star{position:absolute;top:0;right:3px;font-size:10px;color:#ffd23d}
+.icell .il{position:absolute;bottom:1px;left:4px;font-size:9px;font-style:normal;font-weight:900;color:#fff;text-shadow:0 1px 0 #000}
+.eqslot{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:900;font-size:13px}
+.eqslot span{width:64px}.eqslot .icell{width:48px}
+#invCraft{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#invCraft .craftbtn{margin:0;padding:6px 4px;font-size:12px;border-width:3px}
+#invDetail{background:rgba(255,255,255,.35);border:2px solid #7a5630;border-radius:12px;padding:10px;font-size:13px}
+#invDetail .iname{font-size:17px;font-weight:900;text-shadow:0 1px 0 rgba(0,0,0,.6)}
+#invDetail .imeta{font-size:11px;font-weight:800;opacity:.8;margin:2px 0 8px}
+#invDetail .iaff{font-weight:800;line-height:1.5}
+#invDetail .cmp{margin-top:8px;padding-top:6px;border-top:1px dashed #7a5630;font-size:11px;opacity:.85}
+#invDetail .iact{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+#invDetail .iact button{margin:0;padding:7px;font-size:13px;border-width:3px}
+.hint{font-size:11px;opacity:.8;margin-top:8px;text-align:center}
+button.danger{background:linear-gradient(180deg,#e0736f,#a83a36);border-color:#6d211e;box-shadow:0 4px 0 #6d211e}
+@media (max-width:900px){
+  .invgrid{grid-template-columns:1fr 210px}
+  .invgrid .invcol:first-child{grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  #invCraft .craftbtn{font-size:11px}
+}
+
+/* ---------- okunabilirlik: açık zeminde koyu hap arka plan ---------- */
+#evoLabel,#creatureName,#helpHint{background:rgba(20,12,8,.62);padding:1px 8px;border-radius:6px;display:inline-block}
+#helpHint{display:block}
+.gene .tag{background:rgba(30,18,8,.85)}
+/* menüde oyun HUD'u gösterme */
+body.prestart #hud,body.prestart #skillbar,body.prestart #evoTop,body.prestart #chips,body.prestart #crosshair,
+body.prestart #helpHint,body.prestart #echoBar,body.prestart #targetFrame{display:none}
+/* yapı paneli: kapat düğmesi hep görünür */
+.build{max-height:92vh}
+#closeBuild{position:sticky;bottom:0}
+@media (min-width:900px){#buildBody{columns:2;column-gap:18px}#buildBody h3{break-after:avoid}.brow{break-inside:avoid}}
+/* alçak ekran (ör. 800x600) */
+@media (max-height:700px){
+  #hud{height:86px}#badge{width:70px;height:70px;flex-basis:70px}.xpring{width:78px;height:78px}
+  .b-num{font-size:24px}.sl{width:46px;height:46px}.sl.basic,.sl.dashs{width:40px;height:40px}
+  #skillbar{bottom:104px}#echoBar{bottom:156px}#matePrompt{bottom:160px}
+  .bar.hp{height:20px}.bar.en{height:15px}
+}
+@media (max-width:1000px){
+  #targetFrame{width:190px}#evoTop{width:min(520px,calc(100vw - 440px))}#helpHint{display:none}
+}
+
+/* ---------- isim + liderlik ---------- */
+#scoreChip{color:#ffd23d}#dmgChip{color:#ffb08a}#maxChip{color:#ffe08a}
+#maxChip.flash{animation:maxflash .8s ease-out}
+@keyframes maxflash{0%{background:rgba(255,210,60,.9);color:#2a1a00}100%{background:rgba(20,14,8,.62)}}
+.namerow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin:6px 0 14px;font-weight:900}
+.namerow input{font:inherit;font-size:16px;font-weight:800;padding:8px 12px;border-radius:10px;border:3px solid #3e2a16;
+  background:#fff8ea;color:#2c1b0c;width:220px;user-select:text;-webkit-user-select:text}
+.namerow input.bad{border-color:#c0302a;animation:shake .3s}
+.namerow button{margin:0;padding:8px 16px;font-size:14px}
+.lb{width:min(820px,96vw)}
+.lbwrap{max-height:60vh;overflow:auto;border:2px solid #7a5630;border-radius:10px;background:rgba(255,255,255,.3)}
+.lb table{width:100%;border-collapse:collapse;font-size:13px;font-weight:800}
+.lb th{position:sticky;top:0;background:#c49a63;text-align:left;padding:6px 8px;font-size:11px;letter-spacing:1px}
+.lb td{padding:5px 8px;border-top:1px solid rgba(122,86,48,.35)}
+.lb tr.me td{background:rgba(255,210,60,.45)}
+.lb tbody tr:nth-child(1) td:first-child{color:#b8860b}

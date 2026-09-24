@@ -1,0 +1,6 @@
+# yerel veritabanı ve test çıktıları
+/data/
+tests/*.png
+tests/ui-shots/
+node_modules/
+*.log
