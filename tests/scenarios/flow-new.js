@@ -1,5 +1,6 @@
 // Akış: 3 ara boss (%25/%50/%75), olaylar, apex trofesi, evrim beden seçimi + belirme,
 // geçmiş benlik (nesil 1+), kayıt/yükleme (yeni alanlar + eski kayıt uyumu)
+EV.Game.startForm = 'flagellate';
 T.start('normal');
 const G = EV.Game, P = G.player;
 const r = {};

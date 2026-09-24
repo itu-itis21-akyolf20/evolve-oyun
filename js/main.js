@@ -25,7 +25,7 @@ window.EV = window.EV || {};
     { id: 'treasure', w: 3 },                         // Diablo: hazine goblini
   ];
 
-  const FORM_STAGES = [1, 2];
+  const FORM_STAGES = [0, 1, 2];
   function sanitizeForms(f) {
     const out = {};
     if (!f || typeof f !== 'object') return out;
@@ -210,8 +210,9 @@ window.EV = window.EV || {};
       const offer = EV.Build.evolveOffer(this);
       const last = this.stageIndex >= CFG.STAGES.length - 1;
       const nextStage = last ? this.stageIndex : this.stageIndex + 1;
-      offer.forms = EV.FORMS.list(nextStage);
+      offer.forms = EV.FORMS.options(nextStage, this.stageIndex, this.legacy.forms);
       offer.formNow = (this.legacy.forms || {})[nextStage] || null;
+      offer.lineage = EV.FORMS.lineage(this.legacy.forms);
       const next = last ? null : CFG.STAGES[this.stageIndex + 1];
       U.audio.evolve();
       this.pause();
@@ -224,6 +225,7 @@ window.EV = window.EV || {};
              : next.intro + '<br><b>Yetenekler ve pasifler sıfırlanır</b> — genler, parçalar ve yankılar seninle gelir.',
         (geneId, formId) => {
           this.rememberHero();
+          const oldSpec = this.player.bodySpec ? JSON.parse(JSON.stringify(this.player.bodySpec)) : null;
           EV.Build.applyEvolution(this, offer, geneId);
           const nextStage = last ? this.stageIndex : this.stageIndex + 1;
           if (formId && EV.FORMS.get(nextStage, formId)) {
@@ -235,10 +237,24 @@ window.EV = window.EV || {};
           this.evo = 0;
           this.pendingStage = false;
           this.startStage(false);
+          this.morphFrom(oldSpec);
           this.evoIntro = EVO_INTRO;                     // yeni beden büyüyerek belirir, kamera döner
           EV.FX.ring(this.player.group.position, 0xffe08a, 10, 1.0);
           EV.UI.toast('🧬 EVRİMLEŞTİN' + (this.evoIntroName ? ': ' + this.evoIntroName.toLocaleUpperCase('tr-TR') : ''), '#ffe08a', 2600);
         });
+    },
+
+    /** Dönüşüm: eski beden yerinde kıvrılıp solar (yenisi aynı anda büyür). */
+    morphFrom(spec) {
+      if (this.evoGhost) { this.scene.remove(this.evoGhost.g); EV.Creature.dispose(this.evoGhost.g); this.evoGhost = null; }
+      if (!spec) return;
+      let g;
+      try { g = EV.Creature.build(spec, 'creature'); } catch (err) { console.warn('Eski beden kurulamadı:', err); return; }
+      g.position.copy(this.player.group.position);
+      g.rotation.y = this.player.group.rotation.y;
+      g.traverse((o) => { if (o.material && !o.isSprite) { o.material.transparent = true; o.userData.op0 = o.material.opacity; } });
+      this.scene.add(g);
+      this.evoGhost = { g, t: 0 };
     },
 
     /** Şu anki kahramanın anısı: sonraki nesillerde "geçmiş benlik" olarak gelir. */
@@ -494,6 +510,7 @@ window.EV = window.EV || {};
       this.kills = 0;
       this.stats = { totalDmg: 0, maxHit: 0 };
       this.legacy = EV.Build.freshLegacy();
+      if (EV.FORMS.get(0, this.startForm)) this.legacy.forms[0] = this.startForm;   // başlangıç hücresi
       this.inv = EV.Items.freshInv();
       this.build = EV.Build.freshRun(this);
       this.startStage(false);
@@ -516,6 +533,16 @@ window.EV = window.EV || {};
       if (this.bloodMoon > 0) {
         this.bloodMoon -= dt;
         if (this.bloodMoon <= 0) { document.body.classList.remove('bloodmoon'); this.toast('Kan Ayı battı', '#cfc6b8', 1500); }
+      }
+      if (this.evoGhost) {
+        const gh = this.evoGhost;
+        gh.t += dt;
+        const k = Math.min(1, gh.t / (EVO_INTRO * 0.8));
+        gh.g.scale.setScalar(1 - k * 0.7);
+        gh.g.rotation.y += dt * 6 * k;
+        gh.g.position.y = this.player.group.position.y + k * 1.5;
+        gh.g.traverse((o) => { if (o.material && !o.isSprite) o.material.opacity = (o.userData.op0 == null ? 1 : o.userData.op0) * (1 - k); });
+        if (k >= 1) { this.scene.remove(gh.g); EV.Creature.dispose(gh.g); this.evoGhost = null; }
       }
       if (this.evoIntro > 0) {
         this.evoIntro = Math.max(0, this.evoIntro - dt);
@@ -629,6 +656,13 @@ window.EV = window.EV || {};
     window.addEventListener('beforeunload', () => { Game.save(true); EV.Online.beacon(Game); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(true); });
     $('saveCode').textContent = EV.Online.id;
+    // başlangıç hücresi (soy ağacının kökü)
+    Game.startForm = 'amoeba';
+    $('cellForms').innerHTML = EV.FORMS.list(0).map((f) => '<button class="cf" data-f="' + f.id + '" title="' + f.desc + '">' +
+      '<b>' + f.icon + ' ' + f.name + '</b><span>' + f.desc + '</span></button>').join('');
+    const markCell = () => $('cellForms').querySelectorAll('.cf').forEach((n) => n.classList.toggle('sel', n.dataset.f === Game.startForm));
+    $('cellForms').querySelectorAll('.cf').forEach((n) => { n.onclick = () => { Game.startForm = n.dataset.f; markCell(); }; });
+    markCell();
     $('gfxSel').value = EV.GFX.pref;
     $('gfxSel').onchange = (ev) => EV.GFX.setPref(ev.target.value);
     $('codeLoad').onclick = async () => {

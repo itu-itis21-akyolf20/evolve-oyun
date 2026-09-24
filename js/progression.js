@@ -68,8 +68,11 @@ EV.Build = (function () {
     // Avcı Trofesi (apex yenince) ve seçilen beden
     const tr = L.trophies || 0;
     if (tr) addMods(m, { dmg: 0.04 * tr, maxHp: 0.04 * tr });
-    const form = EV.FORMS.get(game.stageIndex, (L.forms || {})[game.stageIndex]);
-    if (form) addMods(m, form.mods);
+    // soy: bu aşamanın bedeni tam, atalar yarı etkiyle (dikenli soy zırhlı kalır)
+    EV.FORMS.lineage(L.forms).forEach((x) => {
+      if (x.stage === game.stageIndex) addMods(m, x.form.mods);
+      else if (x.stage < game.stageIndex) addMods(m, x.form.mods, 0.5);
+    });
     b.mods = m;
 
     const hooks = { basicSt: [], hitChanceSt: [], critSt: [], onHurtSt: [], dashSt: [] };

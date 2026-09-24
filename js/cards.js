@@ -173,12 +173,20 @@ EV.Cards = (function () {
 
     // beden seçimi (varsa): tıklayınca seçili olur; gen seçimi evrimi başlatır
     const forms = offer.forms || [];
-    let formSel = forms.length ? (forms.find((f) => f.id === offer.formNow) || forms[0]).id : null;
+    const openForms = forms.filter((f) => !f.locked);
+    let formSel = openForms.length ? (openForms.find((f) => f.id === offer.formNow) || openForms[0]).id : null;
     $('evFormSec').hidden = !forms.length;
-    $('evForms').innerHTML = forms.map((f) => '<div class="form" data-f="' + f.id + '"><div class="fi">' + f.icon + '</div>' +
-      '<div class="fn">' + f.name + '</div><div class="fd">' + f.desc + '</div><div class="fm">' + DATA.modsText(f.mods) + '</div></div>').join('');
+    // soy yolu: 🦠 Kamçılı → 🦖 Raptor → ?
+    const path = (offer.lineage || []).map((x) => '<span class="ln">' + x.form.icon + ' ' + x.form.name + '</span>');
+    $('evForms').innerHTML = (path.length ? '<div class="lineage">Soyun: ' + path.join(' <i>→</i> ') + ' <i>→</i> <b>?</b></div>' : '') +
+      forms.map((f) => {
+        const trait = f.traitName ? '<div class="ft">🧬 Torunlarına: ' + f.traitName + '</div>' : '';
+        return '<div class="form' + (f.locked ? ' locked' : '') + '" data-f="' + f.id + '"><div class="fi">' + f.icon + '</div>' +
+          '<div class="fn">' + f.name + (f.locked ? ' 🔒' : '') + '</div><div class="fd">' + f.desc + '</div>' +
+          (f.locked ? '' : '<div class="fm">' + DATA.modsText(f.mods) + '</div>' + trait) + '</div>';
+      }).join('');
     const markForm = () => $('evForms').querySelectorAll('.form').forEach((n) => n.classList.toggle('sel', n.dataset.f === formSel));
-    $('evForms').querySelectorAll('.form').forEach((n) => { n.onclick = () => { formSel = n.dataset.f; markForm(); U.audio.card(); }; });
+    $('evForms').querySelectorAll('.form:not(.locked)').forEach((n) => { n.onclick = () => { formSel = n.dataset.f; markForm(); U.audio.card(); }; });
     markForm();
     const genes = offer.genes;
     $('evGenes').innerHTML = genes.map((g, i) => {
@@ -221,7 +229,15 @@ EV.Cards = (function () {
 
   function renderBuild(game) {
     const b = game.build, L = game.legacy;
-    let h = '<h3>AKTİF YETENEKLER (Q E F)</h3><div class="brow">';
+    let h = '';
+    const lin = EV.FORMS.lineage(L.forms);
+    if (lin.length) {
+      h += '<h3>SOY AĞACI</h3><div class="brow">';
+      h += lin.map((x) => item(x.form.icon, x.form.name + (x.stage === game.stageIndex ? ' (şimdi)' : ' (ata · yarı etki)'),
+        DATA.modsText(x.form.mods) + (x.form.traitName && x.stage < game.stageIndex ? ' · iz: ' + x.form.traitName : ''))).join('');
+      h += '</div>';
+    }
+    h += '<h3>AKTİF YETENEKLER (Q E F)</h3><div class="brow">';
     h += b.skills.map((s) => { const d = DATA.skill(s.id); return item(d.icon, d.name + ' · R' + s.rank + (s.fused ? ' ✦' : ''), DATA.describe(d, s.rank)); }).join('') || item('·', 'Boş', 'Seviye atladıkça kart seç');
     h += '</div><h3>ULTİMATE (R)</h3><div class="brow">';
     h += b.ult ? (() => { const d = DATA.skill(b.ult.id); return item(d.icon, d.name + ' · R' + b.ult.rank, DATA.describe(d, b.ult.rank)); })() : item('🔒', 'Yok', '4. seviyeden sonra kartlarda çıkar');

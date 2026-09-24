@@ -121,7 +121,7 @@ EV.Player = (function () {
     const stage = game.stage();
     let spec = JSON.parse(JSON.stringify(stage.body));
     spec.extras = EV.Build.extras(game);
-    spec = EV.FORMS.apply(spec, EV.FORMS.get(game.stageIndex, (game.legacy.forms || {})[game.stageIndex]));
+    spec = EV.FORMS.apply(spec, game.stageIndex, game.legacy.forms);
     if (game.generation > 0) {
       spec.parts.horns = true;
       spec.scale *= 1 + Math.min(game.generation, 6) * 0.05;
