@@ -68,13 +68,13 @@ EV.FX = (function () {
     const geo = new THREE.RingGeometry(radius * 0.55, radius, 18, 1, -Math.PI / 2 - a / 2, a);
     geo.rotateX(-Math.PI / 2);
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      color: color || 0xffffff, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false,
+      color: color || 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false,
     }));
     m.position.set(pos.x, (y == null ? pos.y + 0.9 : y), pos.z);
     m.rotation.y = yaw;
     push(m, 0.2, (it) => {
       const k = 1 - it.life / it.max;
-      it.mesh.material.opacity = 0.75 * (1 - k);
+      it.mesh.material.opacity = 0.9 * (1 - k);
       it.mesh.scale.set(0.8 + k * 0.35, 1, 0.8 + k * 0.35);
     });
   }

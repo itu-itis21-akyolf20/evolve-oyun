@@ -20,6 +20,20 @@
    ============================================================ */
 window.EV = window.EV || {};
 
+/* Işıksız (MeshBasic) materyaller = efektler: vuruş izi, halka, patlama, mermi, yer uyarıları.
+   Sinema ton eşlemesi (ACES) bunları soldurup gri yapıyordu; varsayılan olarak ton eşlemesiz
+   çizilsinler (açıkça toneMapped verilirse o geçerli). */
+(function () {
+  const Basic = THREE.MeshBasicMaterial;
+  function VividBasic(p) {
+    const m = new Basic(p);
+    if (!p || p.toneMapped === undefined) m.toneMapped = false;
+    return m;
+  }
+  VividBasic.prototype = Basic.prototype;
+  THREE.MeshBasicMaterial = VividBasic;
+})();
+
 EV.GFX = (function () {
   'use strict';
 

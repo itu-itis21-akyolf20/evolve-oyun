@@ -103,8 +103,8 @@ EV.Decal = (function () {
       fired: false, flashT: 0, dead: false,
       outline: null, fill: null,
     };
-    t.outline = makeMesh(t.shape, t.p, color, 0.22);
-    t.fill = makeMesh(t.shape, t.p, color, 0.42);
+    t.outline = makeMesh(t.shape, t.p, color, 0.34);
+    t.fill = makeMesh(t.shape, t.p, color, 0.55);
     place(t.outline, t.x, t.z, t.yaw);
     place(t.fill, t.x, t.z, t.yaw);
     conform(t.outline, 1, 1);

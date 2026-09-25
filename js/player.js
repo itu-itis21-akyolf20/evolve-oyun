@@ -392,6 +392,8 @@ EV.Player = (function () {
     game.build.uses[s.id] = (game.build.uses[s.id] || 0) + 1;
     P.faceT = 0.5;
     P.lastCombatT = game.time;
+    // her başarılı yetenekte beden de hareket etsin (gizlilik/yer altı gibi kendi pozu olanlar hariç)
+    if (!P.hidden && !P.burrowed && P.group.userData.atk <= 0) EV.Creature.attack(P.group, ult ? 0.45 : 0.3);
     EV.UI.flashSlot(slot);
   }
 
