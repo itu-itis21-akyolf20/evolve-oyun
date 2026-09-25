@@ -56,11 +56,10 @@ r.formCards = Array.from(document.querySelectorAll('#evForms .form'), (n) => n.q
 const raptor = document.querySelector('#evForms .form[data-f="raptor"]');
 raptor && raptor.click();
 window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit1', key: '1' }));
-T.sim(0.5, { dt: 1 / 30, bot: false });
-r.afterEvolve = { stage: G.stageIndex, form: G.legacy.forms[1], legs: P.bodySpec.parts.legs, intro: +G.evoIntro.toFixed(2), scale: +P.group.scale.x.toFixed(2),
-  heroes: G.legacy.heroes.length };
-T.sim(2, { dt: 1 / 30, bot: false });
-r.introDone = P.group.scale.x === 1;
+r.cineStarted = EV.EvoCine.active;
+T.sim(5, { dt: 1 / 30, bot: false });
+r.afterEvolve = { stage: G.stageIndex, form: G.legacy.forms[1], legs: P.bodySpec.parts.legs, scale: +P.group.scale.x.toFixed(2),
+  heroes: G.legacy.heroes.length, cineDone: !EV.EvoCine.active };
 
 // ---- geçmiş benlik: nesil 1'de önceki nesil kahramanı gelir ----
 clear();

@@ -1,3 +1,4 @@
+if (!EV.Skills2) { await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'js/skills2.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }   // index.html etiketi gelene kadar
 // ---- sk-new-bot: yeni yetenekler gerçek oyunda (bot girdisiyle Q/E/F/R) — hata, sızıntı, takılma ----
 // Her aşamada yeni aktiflerden 3'lü setler + yeni ultimate takılır, bot 20 sn oynar.
 const G = EV.Game;

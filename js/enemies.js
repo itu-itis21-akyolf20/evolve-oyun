@@ -442,7 +442,7 @@ EV.Enemies = (function () {
     game.miniBoss = e;
     EV.FX.ring(e.group.position, 0xffa03d, 20, 1.0);
     U.audio.roar();
-    game.toast('⚔️ ARA BOSS: ' + name.toLocaleUpperCase('tr-TR') + '<br><span class="sub">Yen: garanti Değerli eşya + Gen Özü</span>', '#ffb35a', 3200);
+    game.toast('⚔️ ARA BOSS: ' + name.toLocaleUpperCase('tr-TR') + '<br><span class="sub">Yen: garanti Değerli mutasyon + Gen Özü</span>', '#ffb35a', 3200);
     return e;
   }
 
@@ -453,7 +453,7 @@ EV.Enemies = (function () {
     const pos = W.randomSpawn(game.player.group.position, 16, 24, 3);
     const e = make(game, def, { pos, hp: def.hp * sc.hp, dmg: 0, noChamp: true });
     EV.FX.ring(e.group.position, 0xffd23d, 6, 0.8);
-    game.toast('✨ ' + def.name.toLocaleUpperCase('tr-TR') + ' GÖRÜNDÜ<br><span class="sub">25 sn içinde yakala: bol Gen Özü + 2 eşya</span>', '#ffd23d', 3000);
+    game.toast('✨ ' + def.name.toLocaleUpperCase('tr-TR') + ' GÖRÜNDÜ<br><span class="sub">25 sn içinde yakala: bol Gen Özü + 2 mutasyon</span>', '#ffd23d', 3000);
     return e;
   }
 
@@ -494,7 +494,7 @@ EV.Enemies = (function () {
     game.nemesis = e;
     EV.FX.ring(e.group.position, 0xc27bff, 18, 1.0);
     U.audio.roar();
-    game.toast('👤 GEÇMİŞ BENLİĞİN<br><span class="sub">' + snap.name + ' — seni tanıyor. Yen: Destansı eşya</span>', '#c27bff', 3500);
+    game.toast('👤 GEÇMİŞ BENLİĞİN<br><span class="sub">' + snap.name + ' — seni tanıyor. Yen: Destansı mutasyon</span>', '#c27bff', 3500);
     return e;
   }
 

@@ -34,7 +34,7 @@
     {
       id: 'f_thornwall', stage: 0, slot: 'active', fusion: true, from: 'c_cilia', needPassive: 'p_wall',
       name: 'Dikenli Zar', icon: '🌵', tags: ['fiziksel', 'zar'], kind: 'nova', cost: 22, cd: 4.5,
-      flavor: 'Kirpik Dönüşü + Zar Kalınlaşması: iter ve her yöne diken fırlatır.',
+      flavor: 'Kirpik Dönüşü + Zar Kalınlaşması: şarj beklemeden anında iter ve her yöne diken fırlatır.',
       base: { dmg: 4, r: 7.5, knock: 18, st: [['slow', 2]], shards: { count: 10, dmg: 1.4 } },
     },
 
@@ -66,7 +66,7 @@
     {
       id: 'f_clonestrike', stage: 1, slot: 'active', fusion: true, from: 'r_ambush', needGene: 'g_split',
       name: 'Sürü Pususu', icon: '🦎', tags: ['avci', 'bolunme'], kind: 'leap', cost: 24, cd: 6,
-      flavor: 'Pusu Sıçrayışı + Bölünme geni: indiğin yerde iki kopyan belirir.',
+      flavor: 'Bukalemun Pususu + Bölünme geni: saklanmak yerine avın üstüne sıçrarsın; indiğin yerde iki kopyan belirir.',
       base: { castRange: 18, dmg: 4.2, r: 5, knock: 8, st: [['bleed', 3], ['stun', 0.6]], summon: { count: 2, dur: 10, hpFrac: 0.4, dmgFrac: 0.6 } },
     },
 
@@ -80,7 +80,7 @@
     {
       id: 'f_plague', stage: 2, slot: 'active', fusion: true, from: 'm_howl', needGene: 'g_venom',
       name: 'Veba Uluması', icon: '☠️', tags: ['uluma', 'zehir'], kind: 'nova', cost: 24, cd: 8,
-      flavor: 'Uluma + Zehir Kesesi geni (hücreden!): korku ve veba.',
+      flavor: 'Uluma + Zehir Kesesi geni (hücreden!): sürü emri yerine korku ve veba saçan dev uluma.',
       base: { dmg: 1.2, r: 12, st: [['fear', 2.2], ['vuln', 3], ['poison', 5]] },
     },
     {

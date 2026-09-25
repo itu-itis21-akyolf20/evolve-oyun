@@ -9,6 +9,9 @@
      totem     yere dikilen nesne: en yakına atar / yıldırım / çevresine nabız
      blink     nişana ışınlanır (ya da hedefin arkasına / toprak altından)
      wave      önüne doğru genişleyen dalga (yay ya da düz duvar), sürükleyebilir
+   Etkileşimli türler (grab engulf tether mark parry stealth burrow stance
+   rush charge command) js/skills2.js'tedir; cast/update/clear/updateMotion
+   onlara devreder.
    Ayrıca kalıcı nesneleri yönetir: mermiler, alanlar, yörüngeler,
    tuzaklar, ışınlar, yağmur darbeleri, totemler, dalgalar, zamanlanmış
    darbeler ve oyuncunun atılım/sıçrama hareketi.
@@ -18,6 +21,8 @@
      opts.target  kilitli / nişandaki düşman (varsa)
      opts.source  'player' | 'echo'
      opts.dmgMul  hasar çarpanı (yankı %60)
+     opts.hold    basılı tutulan tuş (basılı tut türleri tuşu izler)
+     opts.slotRef yetenek yuvası (iki aşamalılar beklemeyi kendileri başlatır)
    Başarısızsa false döner (ör. zincir için hedef yok) — enerji harcanmaz.
    ============================================================ */
 window.EV = window.EV || {};
@@ -93,7 +98,7 @@ EV.Skills = (function () {
     const from = pr.pull ? P(game).group.position : pr.mesh.position;
     let knock = pr.knock || 0;
     if (pr.pull) knock = Math.min(30, e.group.position.distanceTo(from) * 3.2);
-    EV.Combat.hitEnemy(game, e, pr.dmg, { source: pr.src, st: pr.st, pow: pr.pow, knock, from, pull: !!pr.pull, basic: !!pr.basic, noRage: !!pr.noRage });
+    EV.Combat.hitEnemy(game, e, pr.dmg, { source: pr.src, st: pr.st, pow: pr.pow, knock, from, pull: !!pr.pull, basic: !!pr.basic, noRage: !!pr.noRage, forceCrit: !!pr.crit });
     if (pr.chainOnHit) chainFrom(game, e, pr.chainOnHit, pr.dmg * 0.6, pr.st, pr.src, pr.pow, 9);
   }
 
@@ -176,7 +181,7 @@ EV.Skills = (function () {
     spawnProj(game, {
       pos: from, dir, speed: o.speed || 38, range: 26, size: o.size || 0.3, dmg, st: [], pow: pl.stats.dmg * pl.stats.statusPower,
       pierce: o.pierce || 0, explode: 0, tick: 0, knock: o.knock || 1.5, chainOnHit: 0, color: SHOT_COLOR[game.stageIndex] || 0xffffff,
-      src: 'player', basic: true,
+      src: 'player', basic: true, crit: !!o.crit,
     });
     U.audio.shoot();
   }
@@ -322,6 +327,7 @@ EV.Skills = (function () {
   function updateMotion(game, dt) {
     const pl = P(game);
     const pos = pl.group.position;
+    if (EV.Skills2 && EV.Skills2.motion(game, dt)) return true;     // hücum / ölüm yuvarlanışı
 
     if (pl.dash) {
       const d = pl.dash;
@@ -1234,7 +1240,8 @@ EV.Skills = (function () {
       case 'blink':     castBlink(game, def, p, ctx(opts, src, echo, base, pow, color, point)); break;
       case 'wave':      castWave(game, def, p, ctx(opts, src, echo, base, pow, color, point)); break;
 
-      default: return false;
+      // etkileşimli türler (skills2.js): kendi başarı durumlarını döndürür
+      default: return !!(EV.Skills2 && EV.Skills2.cast(game, def, rank, p, ctx(opts, src, echo, base, pow, color, point)));
     }
     return true;
   }
@@ -1242,7 +1249,8 @@ EV.Skills = (function () {
   /** Yeni türlerin ortak atış bağlamı. */
   function ctx(opts, src, echo, base, pow, color, point) {
     const t = opts.target;
-    return { src, echo, base, pow, color, point, target: t && t.alive && !t.ally && !t.peaceful ? t : null };
+    return { src, echo, base, pow, color, point, target: t && t.alive && !t.ally && !t.peaceful ? t : null,
+      hold: echo ? null : opts.hold || null, slotRef: echo ? null : opts.slotRef || null };
   }
 
   function spawnSummons(game, p, echo) {
@@ -1278,6 +1286,7 @@ EV.Skills = (function () {
     updateImpacts(game, dt);
     updateTotems(game, dt);
     updateWaves(game, dt);
+    if (EV.Skills2) EV.Skills2.update(game, dt);
   }
 
   function clear() {
@@ -1291,13 +1300,15 @@ EV.Skills = (function () {
     waves.forEach((w) => drop(w.mesh));
     projs.length = zones.length = orbits.length = traps.length = timers.length = 0;
     beams.length = impacts.length = totems.length = waves.length = 0;
+    if (EV.Skills2) EV.Skills2.clear();
   }
 
   return {
     init, cast, update, updateMotion, clear, spawnZone, tagColor, basicShot,
     get counts() {
-      return { projs: projs.length, zones: zones.length, orbits: orbits.length, traps: traps.length,
-        beams: beams.length, impacts: impacts.length, totems: totems.length, waves: waves.length };
+      return Object.assign({ projs: projs.length, zones: zones.length, orbits: orbits.length, traps: traps.length,
+        beams: beams.length, impacts: impacts.length, totems: totems.length, waves: waves.length },
+      EV.Skills2 ? EV.Skills2.counts : {});
     },
   };
 })();

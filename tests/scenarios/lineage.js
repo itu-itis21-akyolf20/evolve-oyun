@@ -17,14 +17,13 @@ function evolve(pick) {
   const el = document.querySelector('#evForms .form[data-f="' + pick + '"]');
   if (el) el.click();
   window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit1', key: '1' }));
-  const ghost = !!G.evoGhost;
-  return { cards, lin: lin.trim(), ghost };
+  const cine = EV.EvoCine.active;
+  T.sim(5, { dt: 1 / 30, bot: false });             // koza sinematiği (araç hızlı ilerletir) + başlangıç kartı
+  return { cards, lin: lin.trim(), cine, cineDone: !EV.EvoCine.active };
 }
 
 r.toReptile = evolve('raptor');
 r.reptile = { form: G.legacy.forms[1], legs: P.bodySpec.parts.legs, extras: P.bodySpec.extras.slice() };
-T.sim(2.5, { dt: 1 / 30, bot: false });
-r.ghostGone = !G.evoGhost;
 
 r.toMammal = evolve('cat');
 r.mammal = { form: G.legacy.forms[2], extras: P.bodySpec.extras.slice(), spikes: !!P.bodySpec.parts.spikes };

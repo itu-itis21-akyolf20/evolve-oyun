@@ -56,9 +56,23 @@ EV.Cards = (function () {
     if (def.slot === 'ult') bits.push('Öfke 100');
     else bits.push('Enerji ' + p.cost);
     bits.push('Bekleme ' + p.cd + 'sn');
-    if (['zone', 'leap', 'barrage', 'totem', 'blink'].indexOf(def.kind) >= 0 && def.base.castRange) bits.push('basılı tut → nişan → bırak');
+    if (['zone', 'leap', 'barrage', 'totem', 'blink', 'mark'].indexOf(def.kind) >= 0 && def.base.castRange) bits.push('basılı tut → nişan → bırak');
     if (def.kind === 'chain') bits.push('hedef gerekir');
     if (def.kind === 'beam') bits.push('nişanını izler');
+    const HOW = {
+      grab: def.base.roll ? 'yakala → yuvarlan → fırlat' : 'bas: yakala · basılı tut: taşı · bırak: fırlat',
+      engulf: 'bas: yut · tekrar bas: tükür',
+      tether: 'yakın kal: uzaklaşırsan bağ kopar',
+      mark: 'tekrar bas: işaretleri patlat',
+      parry: 'darbe gelmeden hemen önce bas',
+      stealth: 'gizlen → ilk saldırın pusu',
+      burrow: 'bas: dal · tekrar bas / saldır: fırla',
+      stance: def.slot === 'ult' ? 'temel saldırın dönüşür' : 'aç/kapa · temel saldırını değiştirir',
+      rush: 'basılı tut: hızlan · nişanla yönlendir · bırak',
+      charge: 'basılı tut: güçlen · bırak',
+      command: 'yardımcıların hedefe saldırır',
+    };
+    if (HOW[def.kind]) bits.push('<b>' + HOW[def.kind] + '</b>');
     return '<div class="cmeta">' + bits.join(' · ') + '</div>';
   }
 

@@ -18,7 +18,6 @@ window.EV = window.EV || {};
   const SAVE_KEY = EV.TEST ? 'evolve_save_test' : 'evolve_save_v4';   // test modu gerçek kayda dokunmaz
   const MINI_AT = [0.25, 0.5, 0.75];                  // ara bossların geldiği EVO oranları
   const DEATH_ANIM = 0.6;                             // ölüm animasyonu (sn)
-  const EVO_INTRO = 1.8;                              // evrim sonrası beden belirme (sn)
   const EVENTS = [
     { id: 'horde', w: 4 },                            // Vampire Survivors: sürü dalgası
     { id: 'moon', w: 2 },                             // Kan Ayı: çok yaratık, çifte ödül
@@ -66,7 +65,7 @@ window.EV = window.EV || {};
     stats: { totalDmg: 0, maxHit: 0 },
     boss: null, bossActive: false, apex: null, apexTimer: 40, pendingStage: false,
     miniBoss: null, miniCount: 0, miniOrder: [0, 1, 2],
-    nemesis: null, nemesisT: 300, eventT: 150, bloodMoon: 0, evoIntro: 0, evoIntroName: '',
+    nemesis: null, nemesisT: 300, eventT: 150, bloodMoon: 0, evoIntroName: '', deferStartCard: false, startCardPending: false,
     paused: true, started: false, spawnTimer: 0, foodTimer: 0, hadLock: false,
 
     /* ---------------- aşama bilgisi ---------------- */
@@ -165,7 +164,7 @@ window.EV = window.EV || {};
         EV.Build.recompute(this);
         this.gainEvo(Math.round(e.evo * scale), Math.round(EV.Build.xpNeed(this) * 2), pos);
         EV.UI.toast('☠️ ' + e.name.toLocaleUpperCase('tr-TR') + ' DEVRİLDİ<br><span class="sub">🏆 Avcı Trofesi ' + L.trophies +
-          '/10 — kalıcı +%' + (L.trophies * 4) + ' hasar ve can · +' + U.fmt(rw.essence || 0) + ' 🧬 · Destansı eşya</span>', '#ffd83d', 4200);
+          '/10 — kalıcı +%' + (L.trophies * 4) + ' hasar ve can · +' + U.fmt(rw.essence || 0) + ' 🧬 · Destansı mutasyon</span>', '#ffd83d', 4200);
         U.audio.evolve();
       } else if (e.isNemesis) {
         this.nemesis = null;
@@ -225,7 +224,6 @@ window.EV = window.EV || {};
              : next.intro + '<br><b>Yetenekler ve pasifler sıfırlanır</b> — genler, parçalar ve yankılar seninle gelir.',
         (geneId, formId) => {
           this.rememberHero();
-          const oldSpec = this.player.bodySpec ? JSON.parse(JSON.stringify(this.player.bodySpec)) : null;
           EV.Build.applyEvolution(this, offer, geneId);
           const nextStage = last ? this.stageIndex : this.stageIndex + 1;
           if (formId && EV.FORMS.get(nextStage, formId)) {
@@ -233,28 +231,19 @@ window.EV = window.EV || {};
             this.evoIntroName = EV.FORMS.get(nextStage, formId).name;
           } else this.evoIntroName = '';
           setTimeout(() => EV.Online.submit(this, true), 0);
-          if (last) this.generation++; else this.stageIndex++;
-          this.evo = 0;
-          this.pendingStage = false;
-          this.startStage(false);
-          this.morphFrom(oldSpec);
-          this.evoIntro = EVO_INTRO;                     // yeni beden büyüyerek belirir, kamera döner
-          EV.FX.ring(this.player.group.position, 0xffe08a, 10, 1.0);
-          EV.UI.toast('🧬 EVRİMLEŞTİN' + (this.evoIntroName ? ': ' + this.evoIntroName.toLocaleUpperCase('tr-TR') : ''), '#ffe08a', 2600);
+          // koza sinematiği: sarılma → (parlama arkasında dünya kurulur) → yumurtadan çıkış → başlangıç kartı
+          EV.EvoCine.play(this, {
+            onSwitch: () => {
+              if (last) this.generation++; else this.stageIndex++;
+              this.evo = 0;
+              this.pendingStage = false;
+              this.deferStartCard = true;
+              this.startStage(false);
+            },
+            onCrack: () => EV.UI.toast('🧬 EVRİMLEŞTİN' + (this.evoIntroName ? ': ' + this.evoIntroName.toLocaleUpperCase('tr-TR') : ''), '#ffe08a', 1600),
+            onDone: () => { if (this.startCardPending) this.openStartCard(); else this.resume(); },
+          });
         });
-    },
-
-    /** Dönüşüm: eski beden yerinde kıvrılıp solar (yenisi aynı anda büyür). */
-    morphFrom(spec) {
-      if (this.evoGhost) { this.scene.remove(this.evoGhost.g); EV.Creature.dispose(this.evoGhost.g); this.evoGhost = null; }
-      if (!spec) return;
-      let g;
-      try { g = EV.Creature.build(spec, 'creature'); } catch (err) { console.warn('Eski beden kurulamadı:', err); return; }
-      g.position.copy(this.player.group.position);
-      g.rotation.y = this.player.group.rotation.y;
-      g.traverse((o) => { if (o.material && !o.isSprite) { o.material.transparent = true; o.userData.op0 = o.material.opacity; } });
-      this.scene.add(g);
-      this.evoGhost = { g, t: 0 };
     },
 
     /** Şu anki kahramanın anısı: sonraki nesillerde "geçmiş benlik" olarak gelir. */
@@ -288,7 +277,6 @@ window.EV = window.EV || {};
       this.miniBoss = null;
       this.nemesis = null;
       this.bloodMoon = 0;
-      this.evoIntro = 0;
       if (!keepBuild) {
         this.miniCount = 0;
         this.miniOrder = [0, 1, 2].sort(() => Math.random() - 0.5);
@@ -323,17 +311,26 @@ window.EV = window.EV || {};
       if (!keepBuild) this.save();          // yüklemede can/enerji geri yüklendikten sonra kaydedilir
 
       if (!keepBuild || !this.build.skills.length) {
-        this.pause();
-        EV.Cards.openLevel(this, {
-          title: this.stageDisplayName().toLocaleUpperCase('tr-TR') + ' BAŞLIYOR',
-          sub: 'Başlangıç yeteneğini seç — <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>',
-          cards: EV.Build.roll(this, 3, 'skill'),
-          onlyType: 'skill',
-          onPick: (c) => { EV.Build.apply(this, c); this.resume(); },
-        });
+        if (this.deferStartCard) {                        // evrim sinematiği bitince açılır
+          this.deferStartCard = false;
+          this.startCardPending = true;
+          this.pause();
+        } else this.openStartCard();
       } else {
         this.resume();
       }
+    },
+
+    openStartCard() {
+      this.startCardPending = false;
+      this.pause();
+      EV.Cards.openLevel(this, {
+        title: this.stageDisplayName().toLocaleUpperCase('tr-TR') + ' BAŞLIYOR',
+        sub: 'Başlangıç yeteneğini seç — <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>',
+        cards: EV.Build.roll(this, 3, 'skill'),
+        onlyType: 'skill',
+        onPick: (c) => { EV.Build.apply(this, c); this.resume(); },
+      });
     },
 
     /** Bekleyen seviye kartlarını sırayla açar. */
@@ -418,7 +415,7 @@ window.EV = window.EV || {};
       EV.Decal.hideIndicator();
     },
     resume() {
-      if (EV.Cards.isOpen() || EV.Inv.isOpen() || EV.Online.isOpen() || !this.player.alive) return;
+      if (EV.Cards.isOpen() || EV.Inv.isOpen() || EV.Online.isOpen() || !this.player.alive || EV.EvoCine.active) return;
       this.paused = false;
       EV.UI.setLockHint(false);
       EV.Input.requestLock();
@@ -533,25 +530,6 @@ window.EV = window.EV || {};
       if (this.bloodMoon > 0) {
         this.bloodMoon -= dt;
         if (this.bloodMoon <= 0) { document.body.classList.remove('bloodmoon'); this.toast('Kan Ayı battı', '#cfc6b8', 1500); }
-      }
-      if (this.evoGhost) {
-        const gh = this.evoGhost;
-        gh.t += dt;
-        const k = Math.min(1, gh.t / (EVO_INTRO * 0.8));
-        gh.g.scale.setScalar(1 - k * 0.7);
-        gh.g.rotation.y += dt * 6 * k;
-        gh.g.position.y = this.player.group.position.y + k * 1.5;
-        gh.g.traverse((o) => { if (o.material && !o.isSprite) o.material.opacity = (o.userData.op0 == null ? 1 : o.userData.op0) * (1 - k); });
-        if (k >= 1) { this.scene.remove(gh.g); EV.Creature.dispose(gh.g); this.evoGhost = null; }
-      }
-      if (this.evoIntro > 0) {
-        this.evoIntro = Math.max(0, this.evoIntro - dt);
-        const k = 1 - this.evoIntro / EVO_INTRO;
-        const P = this.player;
-        const s = k < 1 ? 0.25 + 0.75 * (1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2)) : 1;   // easeOutBack
-        P.group.scale.setScalar(Math.max(0.2, s));
-        P.yaw += dt * 2.2 * (1 - k);
-        if (this.evoIntro === 0) P.group.scale.setScalar(1);
       }
       const busy = this.bossActive || this.pendingStage || (this.miniBoss && this.miniBoss.alive) || (this.nemesis && this.nemesis.alive);
       // geçmiş benlik: 2. nesilden itibaren, önceki nesillerin kahramanlarından biri
@@ -782,8 +760,12 @@ window.EV = window.EV || {};
     requestAnimationFrame(loop);
     const realDt = Game.clock.getDelta();
     const dt = Math.min(realDt, 0.05);
+    const cine = EV.EvoCine.active;
     try {
-      if (Game.started && !Game.paused) {
+      if (cine) {
+        EV.EvoCine.update(Game, dt);
+        EV.FX.update(dt);
+      } else if (Game.started && !Game.paused) {
         Game.time += dt;
         update(dt);
       } else if (Game.player && Game.player.group) {
@@ -794,7 +776,7 @@ window.EV = window.EV || {};
       console.error('Kare hatası:', err);
     }
     if (Game.player && Game.player.group) {
-      EV.GFX.update(Game.paused ? 0 : dt, realDt, Game.player.group.position);
+      EV.GFX.update(Game.paused && !cine ? 0 : dt, realDt, Game.player.group.position);
       EV.GFX.updateBlobs(Game);
     }
     Game.renderer.render(Game.scene, Game.camera);

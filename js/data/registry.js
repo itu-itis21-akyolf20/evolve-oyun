@@ -4,6 +4,9 @@
 
    Yetenek türleri (kind): bolt cone nova zone dash leap chain buff summon
    orbit trap hunt · beam barrage boomerang totem blink wave (js/skills.js)
+   Etkileşimli türler (js/skills2.js): grab engulf tether mark parry stealth
+   burrow stance rush charge command — farklı OYNANIR (basılı tut, ikinci
+   basış, zamanlama, aç/kapa…); ayrıntı skills2.js başlığında.
 
    Rütbe modeli: def.base = rütbe 1 parametreleri,
    def.ranks[i] = rütbe (i+2)'de geçerli olan MUTLAK değerler.
@@ -159,6 +162,71 @@ EV.DATA = (function () {
         if (p.count > 1) bits.push(p.count + ' dalga yelpaze');
         if (p.waves > 1) bits.push(p.waves + ' art arda');
         if (p.carry) bits.push('önüne katıp sürükler');
+        break;
+      /* ---- etkileşimli türler (skills2.js) ---- */
+      case 'grab':
+        if (p.roll) bits.push(p.range + 'm kapar', Math.round(p.carry / p.rollTick) + ' × ' + U.pct(p.rollDmg) + ' yuvarlanma');
+        else bits.push(p.range + 'm dil', 'en çok ' + p.carry + 'sn taşır');
+        bits.push('fırlatma ' + U.pct(p.dmg), 'çarpma ' + U.pct(p.splash) + ' (' + p.splashR + 'm)');
+        if (p.heal) bits.push('hasarın %' + Math.round(p.heal * 100) + '\'i can');
+        bits.push(p.boss ? 'bossu yerine çiviler' : 'ağır/boss: yalnız sersemletir');
+        break;
+      case 'engulf':
+        bits.push(p.range + 'm uzanır', 'sindirim ' + U.pct(p.dmg) + '/tık · ' + p.digest + 'sn');
+        if (p.heal) bits.push('hasarın %' + Math.round(p.heal * 100) + '\'i can');
+        bits.push('tükürük ' + U.pct(p.spit) + ' + ' + U.pct(p.splash) + ' çarpma');
+        break;
+      case 'tether':
+        bits.push(U.pct(p.dmg) + '/tık', p.dur + 'sn bağ', p.breakR + 'm\'de kopar');
+        if (p.heal) bits.push('hasarın %' + Math.round(p.heal * 100) + '\'i can');
+        if (p.pull) bits.push('avı çeker');
+        if (p.jump) bits.push('av ölünce ' + p.jump + ' kez sıçrar');
+        bits.push('sonunda ' + U.pct(p.end) + ' patlama');
+        break;
+      case 'mark':
+        bits.push(p.shape === 'area' ? p.r + 'm alanı işaretler' : 'ısırık ' + dmg);
+        bits.push('patlama ' + U.pct(p.boom) + ' + ' + U.pct(p.per) + '/yük (en çok ' + p.max + ')', p.win + 'sn içinde patlat');
+        if (p.boomR) bits.push(p.boomR + 'm sıçrar');
+        if (p.boomSt) bits.push('patlama: ' + statusText(p.boomSt));
+        break;
+      case 'parry':
+        bits.push(p.win + 'sn savuşturma', 'karşı darbe ' + U.pct(p.counter));
+        if (p.counterR) bits.push(p.counterR + 'm çevreye ' + U.pct(p.splash));
+        if (p.refund) bits.push('başarıda bekleme -%' + Math.round(p.refund * 100));
+        if (p.shield) bits.push('başarıda %' + Math.round(p.shield * 100) + ' kalkan');
+        break;
+      case 'stealth':
+        bits.push(p.dur + 'sn gizlilik', 'pusu ' + U.pct(p.mul) + ' (hep kritik)', p.pounce + 'm atılır');
+        if (p.speed) bits.push('gizliyken hız +%' + Math.round(p.speed * 100));
+        break;
+      case 'burrow':
+        bits.push('en çok ' + p.dur + 'sn kum altı', 'hız +%' + Math.round(p.speed * 100), 'dokunulmaz');
+        bits.push('çıkış ' + dmg + ' (' + p.r + 'm)', 'kalınan her sn +%' + Math.round(p.grow * 100) + ' (en çok +%' + Math.round(p.growMax * 100) + ')');
+        break;
+      case 'stance': {
+        const b = p.basic || {};
+        bits.push(def.slot === 'ult' ? p.dur + 'sn dönüşüm' : 'aç/kapa · ' + p.drain + ' enerji/sn');
+        if (p.mods) bits.push(modsText(p.mods));
+        const bb = [];
+        if (b.mult && b.mult !== 1) bb.push(U.pct(b.mult));
+        if (b.full3) bb.push('3. vuruş çevreyi biçer');
+        else if (b.arc) bb.push('geniş yay');
+        if (b.splash) bb.push(U.pct(b.splash) + ' sıçrama (' + b.splashR + 'm)');
+        if (b.heal) bb.push('%' + Math.round(b.heal * 100) + ' can emer');
+        if (bb.length) bits.push('temel saldırı: ' + bb.join(', '));
+        if (b.st) bits.push('vuruşlar: ' + statusText(b.st));
+        break;
+      }
+      case 'rush':
+        bits.push('basılı tut: hızlanan hücum', 'ezme ' + U.pct(p.trample), 'darbe ' + dmg + ' (hızla)', p.r + 'm');
+        break;
+      case 'charge':
+        bits.push('dolum ' + p.full + 'sn', (p.shape === 'nova' ? p.r + 'm çevre ' : 'ısırık ') + dmg + ' (tam güç)');
+        if (p.stFull) bits.push('tam dolumda ' + statusText(p.stFull));
+        break;
+      case 'command':
+        bits.push('sürü hasarı ×' + p.buff, p.dur + 'sn', 'en az ' + p.pack + ' kurt');
+        bits.push('uluma ' + dmg + ' (' + p.fearR + 'm)');
         break;
       default: break;
     }

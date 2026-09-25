@@ -674,7 +674,8 @@ EV.Boss = (function () {
       const p = e.group.position; for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + U.rand(-0.3, 0.3);
         circle(g, e, p.x + Math.sin(a) * 5, p.z + Math.cos(a) * 5, 2.6, 1.3 * Wm(g, e), 1.2, [['poison', 2]], i * 0.1); } return 0.8; } },
   };
-  const NEM_ALIAS = { leap: 'dash', hunt: 'dash', orbit: 'nova', buff: 'nova' };
+  const NEM_ALIAS = { leap: 'dash', hunt: 'dash', orbit: 'nova', buff: 'nova', grab: 'dash', engulf: 'nova', tether: 'chain', mark: 'chain',
+    parry: 'nova', stealth: 'dash', burrow: 'dash', stance: 'nova', rush: 'dash', charge: 'nova', command: 'summon' };
 
   function nemesisKit(kinds) {
     const ids = [];

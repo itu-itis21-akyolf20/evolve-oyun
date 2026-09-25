@@ -188,35 +188,38 @@ EV.CFG = (function () {
   };
 
   /* ---------------------------------------------------------
-     EŞYA NADİRLİĞİ — renk = nadirlik
-     drop: normal düşüşte ağırlık · craft: Gen Özü ile basmada ağırlık
+     MUTASYON NADİRLİĞİ — renk = nadirlik (bedende de bu renge çalar)
+     drop: av düşüşünde ağırlık · craft: "Mutasyon üret"te ağırlık
+     tint: bedendeki parçanın nadirlik rengine çalma payı · glow: bedende ışır
      --------------------------------------------------------- */
   const RARITY = [
-    { id: 0, name: 'Sıradan',  color: '#d8d8d8', affixes: 1, mul: 1.0, drop: 62,  craft: 34 },
-    { id: 1, name: 'Nadir',    color: '#5fdc5f', affixes: 2, mul: 1.25, drop: 26, craft: 36 },
-    { id: 2, name: 'Değerli',  color: '#4fa8ff', affixes: 3, mul: 1.5, drop: 9,   craft: 20 },
-    { id: 3, name: 'Destansı', color: '#c26bff', affixes: 3, mul: 1.85, drop: 2.6, craft: 8 },
-    { id: 4, name: 'Efsanevi', color: '#ff9a2a', affixes: 4, mul: 2.2, drop: 1.0, craft: 2 },
+    { id: 0, name: 'Sıradan',  color: '#d8d8d8', affixes: 1, mul: 1.0, drop: 62,  craft: 34, tint: 0,    glow: 0 },
+    { id: 1, name: 'Nadir',    color: '#5fdc5f', affixes: 2, mul: 1.25, drop: 26, craft: 36, tint: 0.14, glow: 0 },
+    { id: 2, name: 'Değerli',  color: '#4fa8ff', affixes: 3, mul: 1.5, drop: 9,   craft: 20, tint: 0.22, glow: 0 },
+    { id: 3, name: 'Destansı', color: '#c26bff', affixes: 3, mul: 1.85, drop: 2.6, craft: 8, tint: 0.3,  glow: 1 },
+    { id: 4, name: 'Efsanevi', color: '#ff9a2a', affixes: 4, mul: 2.2, drop: 1.0, craft: 2,  tint: 0.36, glow: 1 },
   ];
 
+  /* MUTASYONLAR (items.js): avlanan yaratığın bir vücut parçası emilir,
+     6 beden bölgesine takılır ve bedende görünür. */
   const ITEMS = {
-    bagSize: 24,
-    chestSize: 48,
-    dropChance: 0.015,         // sıradan yaratık başına, tier ile çarpılır
-    craftCost: 400,            // Gen Özü — bir aşamada ~2-4 üretim (test: 3-4 öz/av)
+    depotSize: 72,             // Gen deposu (eski çanta 24 + sandık 48 tek depoda birleşti)
+    dropChance: 0.015,         // sıradan yaratık başına parça kopma ihtimali, tier ile çarpılır
+    craftCost: 400,            // Gen Özü — "Mutasyon üret" (seçilen bölge için rastgele parça)
     upgradeCost: [300, 550, 900, 1500],  // nadirliği bir kademe yükseltme
-    salvage: [15, 35, 80, 180, 400],
+    salvage: [15, 35, 80, 180, 400],     // Emilim: parçayı Gen Özü'ne çevirme
 
-    /* BASMA (+0 … +9) — nadirlikten ayrı. Dizinin i. elemanı: +i'den +(i+1)'e */
+    /* EVRİMLEŞTİRME (+0 … +9) — nadirlikten ayrı; parça her kademede büyür.
+       Dizinin i. elemanı: +i'den +(i+1)'e */
     plusMax: 9,
     plusBonus: [0, 0.06, 0.12, 0.19, 0.27, 0.36, 0.46, 0.57, 0.70, 0.85],  // +N'de tüm değerlere birikimli bonus
     plusChance: [1, 1, 0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4],               // +1 … +9'a çıkma ihtimali
     plusCost: [40, 70, 110, 160, 230, 320, 440, 600, 800],                // +1 … +9 taban öz bedeli
     plusRarityMul: [1, 1.2, 1.45, 1.75, 2.1],                             // nadirliğe göre bedel çarpanı
-    plusIlvl: 0.15,            // eşya seviyesi başına bedel artışı
-    plusDropFrom: 6,           // +6 ve üstündeyken başarısızlık bir kademe düşürür
-    plusRefund: 0.25,          // parçalarken basmaya harcananın geri dönen payı
-    setChance: 0.3,            // Değerli+ eşyanın bir takıma ait olma ihtimali
+    plusIlvl: 0.15,            // mutasyon seviyesi başına bedel artışı
+    plusDropFrom: 6,           // +6 ve üstündeyken başarısızlık bir kademe geriletir
+    plusRefund: 0.25,          // emilimde evrimleştirmeye harcananın geri dönen payı
+    setChance: 0.3,            // Değerli+ mutasyonun bir soya ait olma ihtimali (soy uyumu)
 
     /* Öldürme ödülleri. ess × (1 + nesil × genEss). drops: her düşüşün en düşük
        nadirliği (min) ve efsanevi olma ihtimali (leg). announce: büyük duyuru. */

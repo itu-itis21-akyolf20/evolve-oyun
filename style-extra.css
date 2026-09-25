@@ -43,3 +43,14 @@ body.bloodmoon #app::after{content:'';position:absolute;inset:0;z-index:4;pointe
 #cellForms .cf span{font-size:11px;font-weight:700;opacity:.85}
 #cellForms .cf.sel{border-color:#ffb020;background:rgba(255,236,170,.9);box-shadow:0 0 0 3px rgba(255,176,32,.35)}
 @media (max-height:520px){ #cellForms .cf span{display:none} #cellForms .cf{min-width:100px;padding:5px 8px !important} }
+
+/* evrim sinematiği: beyaz parlama */
+#evoFlash{position:absolute;inset:0;z-index:19;pointer-events:none;opacity:0;transition:opacity .18s ease-out;
+  background:radial-gradient(circle at 50% 50%,#fffbe8 0%,#ffe9a8 45%,rgba(255,220,140,.9) 100%)}
+
+/* sinema modu: arayüz gizlenir, üst/alt siyah şerit */
+body.cine #hud,body.cine #skillbar,body.cine #echoBar,body.cine #chips,body.cine #evoTop,body.cine #bossBanner,
+body.cine #targetFrame,body.cine #crosshair,body.cine #lockHint,body.cine #marker,body.cine #mTouch,body.cine #tBtn{visibility:hidden}
+body.cine #app::before{content:'';position:absolute;left:0;right:0;top:0;height:11vh;z-index:18;background:#000;
+  box-shadow:0 calc(78vh + 11vh) 0 0 #000;pointer-events:none;animation:cineBars .5s ease-out}
+@keyframes cineBars{from{transform:translateY(-11vh)}to{transform:none}}

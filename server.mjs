@@ -32,7 +32,7 @@ const MAX_BODY = 2048;
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8', '.png': 'image/png',
+  '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp',
 };
 
 /* ---------------- veritabanı ---------------- */
@@ -134,7 +134,7 @@ function readBody(req) {
   });
 }
 
-const ALLOWED = /^\/(index\.html|mobile\.html|style(-extra)?\.css|mobile\/[\w\-.]+\.(js|css)|js\/[\w\-/]+\.js|vendor\/[\w\-.]+\.js)$/;
+const ALLOWED = /^\/(index\.html|mobile\.html|style(-extra)?\.css|mobile\/[\w\-.]+\.(js|css)|assets\/[\w\-./]+\.(js|png|jpg|webp|json)|js\/[\w\-/]+\.js|vendor\/[\w\-.]+\.js)$/;
 
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x');

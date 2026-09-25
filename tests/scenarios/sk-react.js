@@ -1,3 +1,4 @@
+if (!EV.Skills2) { await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'js/skills2.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }   // index.html etiketi gelene kadar
 // ---- sk common helpers (generated; see sk-* scenarios) ----
 const G = EV.Game;
 const DT = 1 / 30;

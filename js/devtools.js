@@ -4,7 +4,7 @@
    Başlangıç ekranı: istediğin aşama / nesil / seviye / soy ile başla.
    Oyun içi 🧪 panel (P tuşu ya da 🧪 düğmesi): ara boss, Alfa, Apex,
    geçmiş benlik, hazine, sürü dalgası, Kan Ayı, şampiyon, istenen
-   düşman türü (I–V), seviye, Gen Özü, eşya, ölümsüzlük, hemen evrim.
+   düşman türü (I–V), seviye, Gen Özü, mutasyon, ölümsüzlük, hemen evrim.
 
    Test modunda kayıt ayrı anahtarda tutulur (main.js SAVE_KEY);
    liderlik tablosuna ve bulut kaydına hiçbir şey gönderilmez (online.js).
@@ -159,7 +159,7 @@ window.EV = window.EV || {};
       g.inv.bag[idx] = EV.Items.makeItem(U.pick(slots).id, rarity, Math.min(g.stageIndex + g.generation, 12));
       given++;
     }
-    g.toast(given ? '🎁 ' + given + ' ' + RAR[rarity].name + ' eşya çantada (Tab)' : 'Çanta dolu', RAR[rarity].color, 1600);
+    g.toast(given ? '🎁 ' + given + ' ' + RAR[rarity].name + ' mutasyon Gen deposunda (Tab)' : 'Gen deposu dolu', RAR[rarity].color, 1600);
   }
 
   const ACTIONS = {

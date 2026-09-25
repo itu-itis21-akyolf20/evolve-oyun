@@ -7,6 +7,8 @@
      Sağ tık  basılı: nişan modu (nişangaha dönük yürü); bu sırada sol tık = uzaktan atış
      Q E F    yetenekler · R ultimate (öfke dolunca)
               yer hedefli olanlar: basılı tut → göstergeyle nişan al → bırak
+              basılı tut türleri (yakala, şarj, hücum): tut → nişanla → bırak
+              iki aşamalılar (yut, işaret, kazı, duruş): tekrar bas → tükür / patlat / çık / kapat
      Boşluk   atılım (enerji) · Tab hedef kilitle/değiştir · X kilidi bırak
      F        (dişi yanındaysa) çiftleş
    ============================================================ */
@@ -91,7 +93,8 @@ EV.Player = (function () {
   const DATA = EV.DATA;
 
   const SLOT_KEYS = ['KeyQ', 'KeyE', 'KeyF'];
-  const GROUND = { zone: 1, leap: 1, barrage: 1, totem: 1, blink: 1 };   // isGround() ayrıca base.castRange ister
+  const GROUND = { zone: 1, leap: 1, barrage: 1, totem: 1, blink: 1, mark: 1 };   // isGround() ayrıca base.castRange ister
+  const SLOT_CODE = { 0: 'KeyQ', 1: 'KeyE', 2: 'KeyF', R: 'KeyR' };
   const raycaster = new THREE.Raycaster();
   const CENTER = new THREE.Vector2(0, 0);
   const _v = new THREE.Vector3();
@@ -122,6 +125,7 @@ EV.Player = (function () {
     let spec = JSON.parse(JSON.stringify(stage.body));
     spec.extras = EV.Build.extras(game);
     spec = EV.FORMS.apply(spec, game.stageIndex, game.legacy.forms);
+    spec.mutations = EV.Items.bodyMutations(game);          // kuşanılan mutasyonlar bedende görünür
     if (game.generation > 0) {
       spec.parts.horns = true;
       spec.scale *= 1 + Math.min(game.generation, 6) * 0.05;
@@ -239,8 +243,9 @@ EV.Player = (function () {
     P.group.rotation.y = P.aimYaw;
     EV.Creature.attack(P.group, 0.15);
     const k = chargeFrac(held || 0);
-    EV.Skills.basicShot(game, t, S.dmg * U.lerp(SHOT.mult, SHOT.maxMult, k), {
-      size: 0.3 + 0.25 * k, speed: 38 + 16 * k, pierce: k >= 1 ? 1 : 0, knock: 1.5 + 6 * k,
+    const amb = EV.Skills2 ? EV.Skills2.ambushShot(game) : 1;        // gizlilikten atış: güçlü ve kritik
+    EV.Skills.basicShot(game, t, S.dmg * U.lerp(SHOT.mult, SHOT.maxMult, k) * amb, {
+      size: 0.3 + 0.25 * k, speed: 38 + 16 * k, pierce: k >= 1 ? 1 : 0, knock: 1.5 + 6 * k, crit: amb > 1,
     });
     P.basicCd = SHOT.cd / S.atkSpd;
     P.faceT = Math.max(0.3, P.basicCd + 0.1);
@@ -251,23 +256,26 @@ EV.Player = (function () {
   function basic(game) {
     const P = game.player;
     const S = P.stats;
+    // duruş / dönüşüm temel saldırıyı değiştirir; pusu, toprak altı ve şarj onu yutar
+    const bm = EV.Skills2 ? EV.Skills2.basicMod(game) : null;
+    if (bm && bm.skip) { P.basicCd = bm.cd || 0.2; P.lastCombatT = game.time; return; }
     const st = game.stage();
     const pos = P.group.position;
-    const range = st.basic.range * Math.sqrt(P.sizeScale) * (1 + (S.area - 1) * 0.3);
+    const range = st.basic.range * Math.sqrt(P.sizeScale) * (1 + (S.area - 1) * 0.3) * ((bm && bm.rangeMul) || 1);
     const step = P.comboT > 0 ? (P.combo + 1) % 3 : 0;
     P.combo = step;
     P.comboT = 0.95;
-    const mult = [1, 1.1, 1.7][step];
+    const mult = [1, 1.1, 1.7][step] * ((bm && bm.mult) || 1);
 
     let tgt = null;
     const cand = [P.lockTarget, P.hover];
     for (let i = 0; i < cand.length && !tgt; i++) {
       const c = cand[i];
-      if (c && c.alive && !c.ally && EV.Creature.surfDist(c.group, pos.x, pos.z) < range + 3) tgt = c;
+      if (c && c.alive && !c.ally && !c.held && EV.Creature.surfDist(c.group, pos.x, pos.z) < range + 3) tgt = c;
     }
     if (!tgt) {
       tgt = EV.Enemies.nearest(pos.x, pos.z, range + 1.5, (e) => {
-        if (e.ally || e.peaceful) return false;
+        if (e.ally || e.peaceful || e.held) return false;
         const a = Math.atan2(e.group.position.x - pos.x, e.group.position.z - pos.z);
         return Math.abs(U.wrapAngle(a - P.aimYaw)) < 1.2;
       });
@@ -282,20 +290,44 @@ EV.Player = (function () {
     P.group.rotation.y = P.aimYaw;
     const yaw = P.aimYaw;
     EV.Creature.attack(P.group, 0.2 + step * 0.04);
-    const arc = step === 2 ? 2.0 : 1.4;
-    EV.FX.slash(pos, yaw + (step === 1 ? 0.3 : step === 0 ? -0.3 : 0), range + P.radius, arc, step === 2 ? 0xffe08a : 0xffffff);
+    let arc = step === 2 ? 2.0 : 1.4;
+    if (bm && bm.arc) arc = Math.max(arc, bm.arc);
+    if (bm && bm.full3 && step === 2) arc = Math.PI * 2;              // dönüşüm: 3. vuruş çevreyi biçer
+    const col = (bm && bm.color) || (step === 2 ? 0xffe08a : 0xffffff);
+    if (arc > 6) for (let k = 0; k < 3; k++) EV.FX.slash(pos, yaw + k * 2.1, range + P.radius, 2.1, col);
+    else EV.FX.slash(pos, yaw + (step === 1 ? 0.3 : step === 0 ? -0.3 : 0), range + P.radius, arc, col);
 
+    const hitO = { source: 'player', basic: true, knock: (step === 2 ? 8 : 3) + ((bm && bm.knock) || 0), from: pos, st: bm ? bm.st : null };
+    let dealt = 0, first = null;
     EV.Enemies.forEachNear(pos.x, pos.z, range + 6, (e) => {
-      if (e.ally || e.peaceful) return;
+      if (e.ally || e.peaceful || e.held) return;
       if (EV.Creature.surfDist(e.group, pos.x, pos.z) > range + P.radius * 0.5) return;
       EV.Creature.closestPoint(e.group, pos.x, pos.z, _v);
       const dx = _v.x - pos.x, dz = _v.z - pos.z, dd = Math.hypot(dx, dz);
       if (dd > 1 && Math.abs(U.wrapAngle(Math.atan2(dx, dz) - yaw)) > arc / 2 + Math.atan2(e.radius, dd)) return;
-      EV.Combat.hitEnemy(game, e, S.dmg * mult, { source: 'player', basic: true, knock: step === 2 ? 8 : 3, from: pos });
+      if (!first) first = e;
+      dealt += EV.Combat.hitEnemy(game, e, S.dmg * mult, hitO);
     });
+    if (bm) basicExtra(game, bm, dealt, first);
     P.basicCd = 0.55 / S.atkSpd;
     P.faceT = Math.max(0.45, P.basicCd + 0.12);   // vuruşlar arası boşlukta gövde dönmesin
     P.lastCombatT = game.time;
+  }
+
+  /** Duruş vuruş ekleri: can emme, hedefin çevresine sıçrama. */
+  function basicExtra(game, bm, dealt, first) {
+    if (bm.heal && dealt > 0) game.healPlayer(dealt * bm.heal);
+    if (bm.splash && first) {
+      const p = first.group.position;
+      const S = game.player.stats;
+      EV.Enemies.forEachNear(p.x, p.z, bm.splashR + 6, (e) => {
+        if (e === first || e.ally || e.peaceful || e.held) return;
+        if (EV.Creature.surfDist(e.group, p.x, p.z) <= bm.splashR) {
+          EV.Combat.hitEnemy(game, e, S.dmg * bm.splash, { source: 'player', st: bm.st, knock: 3, from: p, noRage: true });
+        }
+      });
+      EV.FX.ring(p, bm.color || 0xffb35a, bm.splashR, 0.3);
+    }
   }
 
   /* ---------------- atılım (Boşluk) ---------------- */
@@ -324,18 +356,29 @@ EV.Player = (function () {
 
   function isGround(def) { return !!GROUND[def.kind] && def.base.castRange; }
 
-  function tryCast(game, slot) {
+  /** auto: otomatik mod (G) — tuş basılı tutulmuyor, basılı tut türleri kendiliğinden bırakır. */
+  function tryCast(game, slot, auto) {
     const P = game.player;
     const sd = slotDef(game, slot);
     if (!sd) return;
     const { s, def } = sd;
     const ult = slot === 'R';
+    const S2 = EV.Skills2;
+    // ikinci basış (tükür / patlat / yüzeye çık / duruşu kapat): bekleme ve maliyet yok
+    if (S2 && S2.recast(game, def)) {
+      P.faceT = Math.max(P.faceT, 0.3);
+      P.lastCombatT = game.time;
+      EV.UI.flashSlot(slot);
+      return;
+    }
     const p = DATA.params(def, s.rank);
     if (s.cd > 0) { EV.UI.flashSlot(slot, 'cd'); return; }
     if (ult && P.rage < T.rageMax - 0.01) { EV.UI.flashSlot(slot, 'rage'); return; }
     if (!ult && P.energy < p.cost) { EV.UI.noEnergy(slot); return; }
 
-    const opts = { point: P.aimPoint.clone(), target: P.lockTarget || P.hover, source: 'player' };
+    if (S2) S2.beforeCast(game, def);                 // toprak altındaysan önce fırla
+    const opts = { point: P.aimPoint.clone(), target: P.lockTarget || P.hover, source: 'player',
+      hold: auto ? null : SLOT_CODE[slot], slotRef: s, dmgMul: S2 ? S2.ambushSkill(game, def) : 1 };
     P.aimYaw = Math.atan2(P.aimPoint.x - P.group.position.x, P.aimPoint.z - P.group.position.z);
     const ok = EV.Skills.cast(game, def, s.rank, opts);
     if (!ok) { EV.UI.flashSlot(slot, 'target'); return; }
@@ -344,6 +387,8 @@ EV.Player = (function () {
     else P.energy -= p.cost;
     s.cd = p.cd * (1 - P.stats.cdr);
     s.cdMax = s.cd;
+    // iki aşamalılar: asıl bekleme ikinci aşamada başlar (skills2 finish); şimdilik çift basış kilidi
+    if (S2 && S2.pending(game, def)) { s.cd = 0.3; s.cdMax = 0.3; }
     game.build.uses[s.id] = (game.build.uses[s.id] || 0) + 1;
     P.faceT = 0.5;
     P.lastCombatT = game.time;
@@ -357,7 +402,8 @@ EV.Player = (function () {
      onu boss / kalabalık için saklar. Atılım için enerji payı bırakılır, gizlenirken
      (saklanma yeri) atılmaz, yetenekler arasında kısa ara verilir. */
   const AUTO_KEY = 'evolve_auto';
-  const AUTO_SKIP = { dash: 1, leap: 1, hunt: 1, blink: 1 };
+  // hareket/duruş türleri otomatik atılmaz: oyuncuyu istemediği yere taşır ya da enerjisini yakar
+  const AUTO_SKIP = { dash: 1, leap: 1, hunt: 1, blink: 1, stealth: 1, burrow: 1, stance: 1, rush: 1 };
   const AUTO_GAP = 0.35;          // iki otomatik atış arası (sn)
   const AUTO_RESERVE = 15;        // atılım için bırakılan enerji
   function loadAuto() { try { return localStorage.getItem(AUTO_KEY) === '1'; } catch (e) { return false; } }
@@ -366,7 +412,7 @@ EV.Player = (function () {
     const P = game.player;
     P.autoCast = !P.autoCast;
     try { localStorage.setItem(AUTO_KEY, P.autoCast ? '1' : '0'); } catch (e) { /* gizli sekme */ }
-    game.toast(P.autoCast ? '🔁 Otomatik yetenek AÇIK <span class="sub">(ulti, sıçrama, atılım hariç · G)</span>' : 'Otomatik yetenek kapalı',
+    game.toast(P.autoCast ? '🔁 Otomatik yetenek AÇIK <span class="sub">(ulti, hareket, gizlilik, duruş hariç · G)</span>' : 'Otomatik yetenek kapalı',
       P.autoCast ? '#9de89d' : '#ffb35a', 1600);
   }
 
@@ -387,6 +433,11 @@ EV.Player = (function () {
       case 'boomerang': return (p.range || 12) * 0.9;
       case 'totem': return (p.castRange || 12) + (p.mode === 'pulse' ? 0 : (p.r || 0) * 0.5);
       case 'wave': return (p.range || 12) * 0.8;
+      case 'grab': case 'engulf': return p.range || 8;
+      case 'tether': return (p.range || 14) * 0.9;
+      case 'mark': return p.shape === 'area' ? (p.castRange || 18) : (p.range || 4) + (p.lunge || 0);
+      case 'charge': return p.shape === 'nova' ? (p.r || 5) * 0.8 : (p.range || 4) + (p.lunge || 0) * 0.8;
+      case 'command': return 18;
       default: return 0;
     }
   }
@@ -406,6 +457,18 @@ EV.Player = (function () {
     const P = game.player;
     P.autoT -= dt;
     if (P.autoT > 0 || P.aiming || P.hidden) return;
+    const S2 = EV.Skills2;
+    for (let slot = 0; slot < 3 && S2; slot++) {
+      const sd = slotDef(game, slot);
+      if (!sd) continue;
+      // ikinci aşama: işaretler büyüdüyse / süre bitiyorsa patlat, sindirim bitmek üzereyse tükür
+      if (S2.pending(game, sd.def) && S2.autoRecast(game, sd.def)) { tryCast(game, slot, true); P.autoT = AUTO_GAP; return; }
+      // savuşturma: yalnızca pencere içinde bir darbe inecekse
+      if (sd.def.kind === 'parry' && sd.s.cd <= 0) {
+        const p = DATA.params(sd.def, sd.s.rank);
+        if (P.energy - p.cost >= AUTO_RESERVE && S2.threatSoon(game, p.win)) { tryCast(game, slot, true); P.autoT = AUTO_GAP; return; }
+      }
+    }
     const t = autoTarget(game);
     if (!t) return;
     const pos = P.group.position;
@@ -414,17 +477,19 @@ EV.Player = (function () {
     const dNear = near ? EV.Creature.surfDist(near.group, pos.x, pos.z) : Infinity;
     for (let slot = 0; slot < 3; slot++) {
       const sd = slotDef(game, slot);
-      if (!sd || AUTO_SKIP[sd.def.kind] || sd.s.cd > 0) continue;
+      if (!sd || AUTO_SKIP[sd.def.kind] || sd.def.kind === 'parry' || sd.s.cd > 0) continue;
+      if (S2 && S2.pending(game, sd.def)) continue;
       const p = DATA.params(sd.def, sd.s.rank);
       if (P.energy - p.cost < AUTO_RESERVE) continue;
-      if ((AUTO_SELF[sd.def.kind] ? Math.min(d, dNear) : d) > autoRange(sd.def, p)) continue;
+      const self = AUTO_SELF[sd.def.kind] || (sd.def.kind === 'charge' && p.shape === 'nova');
+      if ((self ? Math.min(d, dNear) : d) > autoRange(sd.def, p)) continue;
       // nişanı geçici olarak hedefe çevir (yer hedefliler hedefin altına düşer)
       const saveAim = _aimSave.copy(P.aimPoint), saveHover = P.hover;
       const tp = t.group.position;
       P.aimPoint.set(tp.x, tp.y + t.group.userData.hipY, tp.z);
       if (!P.lockTarget) P.hover = t;
       const cd0 = sd.s.cd;
-      tryCast(game, slot);
+      tryCast(game, slot, true);
       P.aimPoint.copy(saveAim);
       P.hover = saveHover;
       if (sd.s.cd > cd0) { P.autoT = AUTO_GAP; return; }
@@ -536,7 +601,8 @@ EV.Player = (function () {
 
     /* --- gizlilik: saklanma yerinde ve son 2 sn saldırmadıysan --- */
     P.cover = W.inCover(P.group.position.x, P.group.position.z);
-    P.hidden = !!P.cover && game.time - P.lastCombatT > 2 && !game.bossActive;
+    P.hidden = (!!P.cover && game.time - P.lastCombatT > 2 && !game.bossActive) ||
+      !!(EV.Skills2 && EV.Skills2.hidden(game));                  // bukalemun pususu / toprak altı
     P.hiddenT = P.hidden ? (P.hiddenT || 0) + dt : 0;
 
     /* --- yön: hareket yönüne dön; saldırırken / nişan modunda nişana --- */
@@ -555,7 +621,9 @@ EV.Player = (function () {
     const canAct = !inMotion && !busy && !EV.Status.stunned(P);
     if (canAct) {
       // nişan modunda sol tık şarj eder, bırakınca atar (sağ tık önce bırakılsa da atış kaybolmaz)
-      if (!P.aiming && (P.charge > 0 || (aimMode && I.mouse.left && P.basicCd <= 0))) {
+      const held = !!(EV.Skills2 && EV.Skills2.busy(game));           // şarj ya da ağızda av: saldırı yok
+      if (held) P.charge = 0;
+      else if (!P.aiming && (P.charge > 0 || (aimMode && I.mouse.left && P.basicCd <= 0))) {
         if (I.mouse.left) {
           const was = chargeFrac(P.charge || 0);
           P.charge = (P.charge || 0) + dt;
@@ -573,7 +641,8 @@ EV.Player = (function () {
         const slot = slots[i], code = codes[i];
         const sd = slotDef(game, slot);
         if (!sd) continue;
-        const ground = isGround(sd.def);
+        // ikinci basış bekleyen (ör. yere nişanlı işaret) nişan almaz, doğrudan patlatır
+        const ground = isGround(sd.def) && !(EV.Skills2 && EV.Skills2.pending(game, sd.def));
         if (I.hit(code)) {
           // F: menzilde dişi varsa çiftleşme önceliklidir
           if (code === 'KeyF' && EV.Mating.canMate(game)) continue;

@@ -1,3 +1,4 @@
+if (!EV.Skills2) { await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'js/skills2.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }   // index.html etiketi gelene kadar
 // ---- sk common helpers (generated; see sk-* scenarios) ----
 const G = EV.Game;
 const DT = 1 / 30;
@@ -94,6 +95,8 @@ function durOf(def, rank) {
   if (p.summon && p.summon.dur) d = Math.max(d, p.summon.dur);
   if (def.kind === 'bolt') d = Math.max(d, p.range / p.speed);
   if (p.pulses) d = Math.max(d, p.pulses * (p.pulseGap || 0.4));
+  if (p.digest) d = Math.max(d, p.digest + 1.5);      // yut: sindirim + tükürük uçuşu
+  if (p.win) d = Math.max(d, p.win + 0.5);            // işaret: pencere sonunda kendiliğinden patlar
   return d;
 }
 

@@ -75,7 +75,7 @@
     <div id="creatureName">Tek Hücreli</div>
   </div>
 
-  <div id="helpHint"><kbd>Tab</kbd> çanta · <kbd>K</kbd> yapı · <kbd>L</kbd> liderlik · <kbd>T</kbd> kilit · <kbd>Esc</kbd> fare</div>
+  <div id="helpHint"><kbd>Tab</kbd> beden · <kbd>K</kbd> yapı · <kbd>L</kbd> liderlik · <kbd>T</kbd> kilit · <kbd>Esc</kbd> fare</div>
 
   <!-- ===================== KART SEÇİMİ ===================== -->
   <div id="cardPanel" class="overlay" hidden>
@@ -115,21 +115,22 @@
   <div id="invPanel" class="overlay" hidden>
     <div id="invMsg" class="invmsg"></div>
     <div class="panel inv">
-      <h2>ÇANTA · SANDIK <span class="ess">🧬 <b id="invEss">0</b> Gen Özü</span></h2>
+      <h2><span class="ttl">BEDEN · MUTASYONLAR</span> <span class="ess">🧬 <b id="invEss">0</b> Gen Özü</span>
+        <button id="invX" class="invX ghost" title="Kapat (Tab / Esc)">Kapat ✕</button></h2>
       <div class="invgrid">
-        <div class="invcol">
-          <h3>KUŞANILAN</h3><div id="invEquip"></div>
+        <div class="invcol bodycol">
+          <div id="invEquip" class="bodymap"></div>
           <div id="invSets"></div>
-          <h3>EŞYA ÜRET · <span id="invCraftCost">400</span> öz</h3><div id="invCraft"></div>
-          <div class="hint">Her avlanan yaratık gücü kadar Gen Özü verir. Apex avı büyük ödül verir.</div>
+          <h3>MUTASYON ÜRET · <span id="invCraftCost">400</span> öz</h3><div id="invCraft"></div>
         </div>
         <div class="invcol wide">
-          <h3>ÇANTA</h3><div id="invBag" class="igrid"></div>
-          <h3>SANDIK</h3><div id="invChest" class="igrid chest"></div>
+          <h3>GEN DEPOSU <span id="invCount" class="cnt"></span></h3>
+          <div id="invTabs" class="itabs"></div>
+          <div id="invBag" class="igrid"></div>
         </div>
         <div class="invcol" id="invDetail"></div>
       </div>
-      <div class="hint">Tab / Esc kapat</div>
+      <div class="hint">Avladığın yaratıkların parçaları kopar; üstünden geç, emilsin. Takılı mutasyonlar bedeninde görünür. Tab / Esc kapat</div>
     </div>
   </div>
 
@@ -186,8 +187,8 @@
         <div><kbd>W A S D</kbd> hareket · <kbd>Fare</kbd> bak/nişan · <kbd>Tekerlek</kbd> yakınlaş</div>
         <div><kbd>Sol Tık</kbd> yakın saldırı · <kbd>Sağ Tık</kbd> basılı + <kbd>Sol Tık</kbd> uzaktan atış (daha zayıf) · <kbd>Boşluk</kbd> atılım</div>
         <div><kbd>Q</kbd> <kbd>E</kbd> <kbd>F</kbd> yetenek · <kbd>R</kbd> ultimate (öfke) · yer hedefliler: basılı tut, bırak (iptal: sağ tık)</div>
-        <div><kbd>T</kbd>/<kbd>Orta tık</kbd> hedef kilitle · <kbd>X</kbd> bırak · <kbd>Tab</kbd> çanta/sandık · <kbd>K</kbd> yapı · <kbd>F</kbd> çiftleş · <kbd>G</kbd> oto yetenek</div>
-        <div>Uzun otlara / yosunlara / kaya kovuklarına gir: <b>saklan</b>. Sandıklar oralarda.</div>
+        <div><kbd>T</kbd>/<kbd>Orta tık</kbd> hedef kilitle · <kbd>X</kbd> bırak · <kbd>Tab</kbd> beden/mutasyonlar · <kbd>K</kbd> yapı · <kbd>F</kbd> çiftleş · <kbd>G</kbd> oto yetenek</div>
+        <div>Uzun otlara / yosunlara / kaya kovuklarına gir: <b>saklan</b>. Gen kozaları oralarda.</div>
       </div>
     </div>
   </div>
@@ -212,6 +213,7 @@
 <script src="js/status.js"></script>
 <script src="js/combat.js"></script>
 <script src="js/skills.js"></script>
+<script src="js/skills2.js"></script>
 <script src="js/enemies.js"></script>
 <script src="js/boss.js"></script>
 <script src="js/pickups.js"></script>
@@ -223,6 +225,7 @@
 <script src="js/cards.js"></script>
 <script src="js/inv-ui.js"></script>
 <script src="js/online.js"></script>
+<script src="js/evocine.js"></script>
 <script src="js/main.js"></script>
 <script src="js/devtools.js"></script>
 </body>

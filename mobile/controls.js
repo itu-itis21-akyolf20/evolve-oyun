@@ -6,7 +6,7 @@
    Düğmeler : ⚔️ yakın saldırı (basılı tut) · 🎯 uzak atış (basılı tut)
               💨 atılım · Q E F yetenek · R ultimate
               Yer hedefli yetenek: düğmeye bas, parmağı kaydırarak nişan al, bırak
-   Üst sol  : ☰ menü/liderlik · 🎒 çanta · 📜 yapı · 🔒 kamera kilidi ·
+   Üst sol  : ☰ menü/liderlik · 🧬 beden · 📜 yapı · 🔒 kamera kilidi ·
               🤖 otomatik hedef · ⛶ tam ekran
 
    Her dokunuş kimliğiyle izlenir (çoklu dokunma): bir parmak yürürken
@@ -33,7 +33,7 @@
     '<div id="mStick" hidden><div id="mKnob"></div></div>' +
     '<div id="mTop">' +
       '<button data-a="menu" title="Menü">☰</button>' +
-      '<button data-a="bag" title="Çanta">🎒</button>' +
+      '<button data-a="bag" title="Beden / mutasyonlar">🧬</button>' +
       '<button data-a="build" title="Yapı">📜</button>' +
       '<button data-a="hardlock" title="Kamerayı hedefe kilitle">🔒</button>' +
       '<button data-a="assist" title="Otomatik hedef" class="mAssist">🤖</button>' +

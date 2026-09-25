@@ -1,3 +1,4 @@
+if (!EV.Skills2) { await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'js/skills2.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }   // index.html etiketi gelene kadar
 // ---- sk-new: yeni yetenekler (beam/barrage/boomerang/totem/blink/wave) — hasar, temizlik, yankı, sağlamlık ----
 // Her yeni yetenek: rütbe 1 ve 5, tek hedef + 8'li sürü, yankı (echo) atışı, hedef ölürken atış,
 // farklı dt ile kare hızı bağımsızlığı. Referans: c_drop, c_acid, c_lash (+ her aşamadan birer eski yetenek).

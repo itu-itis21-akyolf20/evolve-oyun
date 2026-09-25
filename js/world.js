@@ -5,7 +5,9 @@
    hem varlık yerleşimi (ve gfx.js'teki çim gölgelendiricisi) aynı
    kaynağı kullanır — formül değişirse gfx.js HEIGHT_GLSL de değişmeli.
    Dekor 60 m'lik parçalara birleştirilir: görünmeyen parça çizilmez
-   (gölge geçişinde de). Arazi yumuşak gölgeli + ince detay dokusu.
+   (gölge geçişinde de). Arazi yüzeyi gfx.js'te gerçek dokuların
+   karışımı (splatting): burada her köşeye 4 katman ağırlığı (eğim,
+   yükseklik, gürültü, patika, havuz kıyısı) + ton/boşluk gölgesi yazılır.
    Engeller ızgaraya konur: kaçınma ve çarpışma sorguları O(yakın).
    ============================================================ */
 window.EV = window.EV || {};
@@ -128,37 +130,32 @@ EV.World = (function () {
     return false;
   }
 
-  /* ---------------- arazi mesh ---------------- */
-  /** Tekrarlanan ince detay dokusu (gri gürültü): yakından bakınca düz renk olmasın. */
-  function detailTexture() {
-    const S = 128;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = S;
-    const ctx = cv.getContext('2d');
-    const img = ctx.createImageData(S, S);
-    for (let y = 0; y < S; y++) {
-      for (let x = 0; x < S; x++) {
-        const nse = U.hash2(x, y) * 0.55 + U.hash2(x >> 2, y >> 2) * 0.3 + U.hash2(x >> 4, y >> 4) * 0.15;
-        const v = Math.round(205 + nse * 50);
-        const i = (y * S + x) * 4;
-        img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-        img.data[i + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(SIZE / 5, SIZE / 5);
-    tex.anisotropy = 4;
-    return tex;
+  /* ---------------- gürültü ---------------- */
+  /** Yumuşak değer gürültüsü (0..1). */
+  function vnoise(x, z) {
+    const ix = Math.floor(x), iz = Math.floor(z);
+    const fx = x - ix, fz = z - iz;
+    const ux = fx * fx * (3 - 2 * fx), uz = fz * fz * (3 - 2 * fz);
+    const a = U.hash2(ix, iz), b = U.hash2(ix + 1, iz), c = U.hash2(ix, iz + 1), d = U.hash2(ix + 1, iz + 1);
+    return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
   }
+  /** 3 oktav fraktal gürültü (0..1, ortalama ~0.5). */
+  function fbm(x, z) {
+    return vnoise(x, z) * 0.57 + vnoise(x * 2.03 + 17.3, z * 2.03 - 5.1) * 0.29 + vnoise(x * 4.1 - 9.7, z * 4.1 + 3.3) * 0.14;
+  }
+  const sstep = (a, b, v) => { const t = U.clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
+  /* ---------------- arazi mesh ---------------- */
+  let seg = 200;
   function buildTerrain() {
-    const seg = EV.GFX ? EV.GFX.seg : 200;
+    seg = EV.GFX ? EV.GFX.seg : 200;
     const geo = new THREE.PlaneGeometry(SIZE, SIZE, seg, seg);
     geo.rotateX(-Math.PI / 2);
-    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
-    terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }));
+    const count = geo.attributes.position.count;
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    geo.setAttribute('splat', new THREE.BufferAttribute(new Uint8Array(count * 4), 4, true));
+    const mat = EV.GFX ? EV.GFX.terrainMaterial() : new THREE.MeshLambertMaterial({ vertexColors: true });
+    terrain = new THREE.Mesh(geo, mat);
     terrain.frustumCulled = false;
     terrain.receiveShadow = true;
     scene.add(terrain);
@@ -172,40 +169,121 @@ EV.World = (function () {
     terrain.geometry.computeVertexNormals();
   }
 
-  /** Köşe renkleri: yükseklik geçişi + dik yamaçta kaya + büyük lekeler + havuz kıyısı ıslaklığı. */
-  function paintTerrain(pal) {
-    const pos = terrain.geometry.attributes.position;
-    const col = terrain.geometry.attributes.color;
-    const cLow = new THREE.Color(pal.low), cMid = new THREE.Color(pal.mid), cHigh = new THREE.Color(pal.high);
-    const cRock = new THREE.Color(pal.rockDark).lerp(new THREE.Color(pal.rock), 0.5);
-    const cWet = new THREE.Color(pal.low).offsetHSL(0, 0.05, -0.12);
-    const tmp = new THREE.Color();
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), z = pos.getZ(i), h = pos.getY(i);
-      const t = U.clamp((h + 4) / 9, 0, 1);
-      if (t < 0.5) tmp.copy(cLow).lerp(cMid, t * 2);
-      else tmp.copy(cMid).lerp(cHigh, (t - 0.5) * 2);
-      // büyük ölçekli lekeler (çayır / toprak / kum öbekleri)
-      const patch = Math.sin(x * 0.07 + Math.sin(z * 0.05) * 2) * Math.cos(z * 0.061 + Math.sin(x * 0.043)) * 0.5 + 0.5;
-      tmp.offsetHSL((patch - 0.5) * 0.025, (patch - 0.5) * 0.08, (patch - 0.5) * 0.07);
-      const sl = slopeAt(x, z);
-      if (sl > 0.45) tmp.lerp(cRock, U.clamp((sl - 0.45) * 1.6, 0, 0.85));
-      if (isInPool(x, z, 3.5)) tmp.lerp(cWet, 0.55);
-      tmp.offsetHSL(0, 0, (U.hash2(Math.round(x * 2), Math.round(z * 2)) - 0.5) * 0.05);
-      col.setXYZ(i, tmp.r, tmp.g, tmp.b);
+  /* ---------------- zemin karışımı (splat) ----------------
+     Katmanlar (gfx.js SPLAT ile aynı sıra): 0 taban · 1 leke · 2 leke · 3 kaya.
+     Kurallar [leke1, leke2, kaya] miktarı döndürür; öncelik kaya > leke1 > leke2 > taban.
+     wet: havuz kıyısına yakınlık (0..1), cov: saklanma yeri içinde mi. */
+  const SPLAT_RULES = {
+    // deniz tabanı: dalgalı kum · ince silt · koyu çamur/yosun lekeleri · kaya çıkıntıları
+    cell(x, z, h, sl, wet, cov) {
+      const silt = sstep(0.42, 0.62, fbm(x / 45 + 11, z / 45 - 3));
+      const dark = Math.max(sstep(0.56, 0.68, fbm(x / 15 - 70, z / 15 + 20)), cov * 0.9);
+      const rock = sstep(0.64, 0.76, fbm(x / 26 + 40, z / 26 - 12)) + sstep(2.5, 7, h) + sstep(0.075, 0.105, sl) * 0.6;
+      return [silt, dark, rock];
+    },
+    // çöl: kum · kuru göl yatağı çatlakları · yamaç eteğinde çakıl · dik yamaçta kaya
+    reptile(x, z, h, sl, wet, cov) {
+      const n = fbm(x / 9, z / 9) - 0.5;
+      const lake = sstep(-1.0, -2.3, h) * (1 - sstep(0.1, 0.2, sl)) * sstep(0.35, 0.55, fbm(x / 30 + 5, z / 30 + 8));
+      const cracked = Math.max(lake, sstep(0.68, 0.76, fbm(x / 18 + 50, z / 18)));
+      const gravel = Math.max(sstep(0.13, 0.21, sl + n * 0.08) * 0.85, sstep(0.63, 0.72, fbm(x / 13 - 30, z / 13 + 90)) * 0.8, wet * 0.9, cov);
+      const rock = sstep(0.21, 0.3, sl + n * 0.1) + sstep(4, 10, h) * 0.9;
+      return [cracked, gravel, rock];
+    },
+    // çayır: çim · toprak patikalar/lekeler/çamurlu kıyı · kuru çayır lekeleri · kaya
+    mammal(x, z, h, sl, wet, cov) {
+      const n = fbm(x / 9, z / 9) - 0.5;
+      const path = sstep(0.03, 0.012, Math.abs(fbm(x / 75 + 3, z / 75 - 7) - 0.5));
+      const dirt = Math.max(path, sstep(0.74, 0.82, fbm(x / 12 + 60, z / 12)) * 0.9, wet, sstep(0.18, 0.26, sl + n * 0.08) * 0.5);
+      const meadow = Math.max(sstep(0.5, 0.68, fbm(x / 38 + 200, z / 38 - 100)), sstep(1.8, 3.8, h) * 0.6, cov);
+      const rock = sstep(0.23, 0.31, sl + n * 0.1) + sstep(4, 10, h) * 0.9;
+      return [dirt, meadow, rock];
+    },
+  };
+
+  /** Havuz kıyısına yakınlık: kenardan 4 m dışarıda 0, kenarda/içinde 1. */
+  function wetness(x, z) {
+    let best = 99;
+    for (let i = 0; i < pools.length; i++) {
+      const p = pools[i];
+      const dx = x - p.x, dz = z - p.z;
+      if (Math.abs(dx) > p.r + 5 || Math.abs(dz) > p.r + 5) continue;
+      best = Math.min(best, Math.sqrt(dx * dx + dz * dz) - p.r);
     }
-    col.needsUpdate = true;
+    return sstep(4, 0.5, best);
   }
 
-  /* ---------------- dekor parçaları ---------------- */
+  /**
+   * Köşe başına 4 katman ağırlığı (bayt) + köşe rengi (ince ton katmanı ~1):
+   * büyük parlaklık lekeleri, sıcak/soğuk kayma, çukurlarda boşluk gölgesi, ıslak kıyı.
+   */
+  function paintTerrain(stage) {
+    const pos = terrain.geometry.attributes.position;
+    const col = terrain.geometry.attributes.color;
+    const spl = terrain.geometry.attributes.splat;
+    const sa = spl.array;
+    const rule = SPLAT_RULES[stage.id] || (stage.kind === 'cell' ? SPLAT_RULES.cell : SPLAT_RULES.mammal);
+    const water = stage.kind === 'cell';
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i), h = pos.getY(i);
+      const sl = slopeAt(x, z);
+      const wet = water ? 0 : wetness(x, z);
+      const r = rule(x, z, h, sl, wet, inCover(x, z) ? 1 : 0);
+      const w3 = U.clamp(r[2], 0, 1);
+      const w1 = U.clamp(r[0], 0, 1) * (1 - w3);
+      const w2 = U.clamp(r[1], 0, 1) * (1 - w3 - w1);
+      const w0 = Math.max(0, 1 - w1 - w2 - w3);
+      sa[i * 4] = Math.round(w0 * 255);
+      sa[i * 4 + 1] = Math.round(w1 * 255);
+      sa[i * 4 + 2] = Math.round(w2 * 255);
+      sa[i * 4 + 3] = Math.round(w3 * 255);
+      // ton: büyük lekeler · sıcak/soğuk · çukur gölgesi · ıslaklık · ince kumlanma
+      const cav = (height(x + 5, z) + height(x - 5, z) + height(x, z + 5) + height(x, z - 5)) * 0.25 - h;
+      const k = (1 + (fbm(x / 26 + 300, z / 26 - 40) - 0.5) * 0.3)
+        * (1 - U.clamp(cav * 0.1, -0.06, 0.16))
+        * (1 - wet * 0.4)
+        * (1 + (U.hash2(Math.round(x * 2), Math.round(z * 2)) - 0.5) * 0.05);
+      const hue = (fbm(x / 60 - 90, z / 60 + 30) - 0.5) * 0.14;
+      col.setXYZ(i, k * (1 + hue), k, k * (1 - hue));
+    }
+    col.needsUpdate = true;
+    spl.needsUpdate = true;
+    if (EV.GFX && EV.GFX.setSplat) EV.GFX.setSplat(sa, seg);
+  }
+
+  /* ---------------- dekor parçaları ----------------
+     Parça türü (gfx.js dekor gölgelendiricisi): 0 düz · 1 kaya · 2 yaprak · 3 kabuk */
+  const K_ROCK = 1, K_LEAF = 2, K_BARK = 3;
+  const _v = new THREE.Vector3();
+  const _c = new THREE.Color();
+
+  /** Pürüzlü çokyüzlü: köşeler konuma bağlı gürültüyle itilir (aynı köşe = aynı itme, dikişsiz). */
+  function lumpy(geo, amount) {
+    const p = geo.attributes.position;
+    const seed = U.rand(0, 500);
+    for (let i = 0; i < p.count; i++) {
+      _v.fromBufferAttribute(p, i);
+      const k = 1 + (U.hash2(Math.round(_v.x * 97) + seed, Math.round(_v.y * 89 + _v.z * 83)) - 0.5) * amount;
+      p.setXYZ(i, _v.x * k, _v.y * k, _v.z * k);
+    }
+    return geo;
+  }
+
+  /** Kaya rengi: açık/koyu palet arasında + hafif sıcak/soğuk sapma. */
+  function rockColor(pal) {
+    return _c.setHex(pal.rockDark).lerp(new THREE.Color(pal.rock), Math.random()).lerp(new THREE.Color(pal.mid), 0.2)
+      .offsetHSL(U.rand(-0.02, 0.02), U.rand(-0.04, 0.03), U.rand(-0.05, 0.04)).getHex();
+  }
+
   function addRock(col, x, y, z, size, pal) {
     const n = U.randInt(2, 4);
     for (let i = 0; i < n; i++) {
       const s = size * U.rand(0.5, 1.0);
-      col.add(new THREE.DodecahedronGeometry(s, 0),
-        G.xform(x + U.rand(-size, size) * 0.6, y + s * U.rand(0.25, 0.5), z + U.rand(-size, size) * 0.6,
-          U.rand(0, 3), U.rand(0, 3), U.rand(0, 3), 1, U.rand(0.55, 0.9), 1),
-        i === 0 ? pal.rock : pal.rockDark);
+      const geo = s > 1.1 ? new THREE.IcosahedronGeometry(s, 1) : new THREE.DodecahedronGeometry(s, 0);
+      col.add(lumpy(geo, s > 1.1 ? 0.34 : 0.22),
+        G.xform(x + U.rand(-size, size) * 0.6, y + s * U.rand(0.2, 0.45), z + U.rand(-size, size) * 0.6,
+          U.rand(-0.4, 0.4), U.rand(0, 6.3), U.rand(-0.4, 0.4), U.rand(0.9, 1.25), U.rand(0.5, 0.85), U.rand(0.85, 1.15)),
+        rockColor(pal), K_ROCK);
     }
   }
 
@@ -220,36 +298,43 @@ EV.World = (function () {
     }
   }
 
-  const LEAF = [0x4f8f3a, 0x3f7a2e, 0x63a648, 0x587f2c];
-  const PINE = [0x2f5f3a, 0x28523a, 0x3a6a40];
-  /** Yapraklı ağaç: konik gövde + yukarı doğru toplanan yaprak taçları. */
+  const LEAF = [0x4c7a2e, 0x3e6a28, 0x5b8a34, 0x6a8d36, 0x557a2a, 0x46722f];
+  const PINE = [0x2b5033, 0x25482f, 0x33603a, 0x2e5a36];
+  const BARK = [0x5a3f28, 0x4e3824, 0x62472e];
+  /** Yapraklı ağaç: eğik gövde + yuvarlak ya da uzun taç; alttaki yapraklar gölgede (koyu). */
   function addTree(col, x, y, z, size) {
     if (Math.random() < 0.35) return addPine(col, x, y, z, size);
-    const trunkH = size * U.rand(3.0, 4.2);
-    col.add(new THREE.CylinderGeometry(size * 0.16, size * 0.3, trunkH, 6),
-      G.xform(x, y + trunkH / 2, z, U.rand(-0.05, 0.05), U.rand(0, 3), U.rand(-0.05, 0.05)), 0x5e4028);
-    const blobs = U.randInt(4, 6);
+    const tall = Math.random() < 0.4;
+    const trunkH = size * U.rand(2.8, 4.0) * (tall ? 1.15 : 1);
+    const lx = U.rand(-0.08, 0.08), lz = U.rand(-0.08, 0.08);
+    col.add(new THREE.CylinderGeometry(size * 0.14, size * 0.3, trunkH, 6),
+      G.xform(x, y + trunkH / 2, z, lx, U.rand(0, 3), lz), U.pick(BARK), K_BARK);
+    const top = { x: x + Math.sin(lz) * trunkH * 0.5, y: y + trunkH, z: z - Math.sin(lx) * trunkH * 0.5 };
+    const blobs = U.randInt(5, 7);
     const base = U.pick(LEAF);
     for (let i = 0; i < blobs; i++) {
-      const s = size * U.rand(0.9, 1.45) * (i === 0 ? 1.25 : 1);
-      const a = (i / blobs) * Math.PI * 2, r = i === 0 ? 0 : size * U.rand(0.55, 0.9);
-      const c = new THREE.Color(base).offsetHSL(U.rand(-0.02, 0.02), 0, U.rand(-0.05, 0.06)).getHex();
-      col.add(new THREE.IcosahedronGeometry(s, 0),
-        G.xform(x + Math.cos(a) * r, y + trunkH + size * (i === 0 ? 0.6 : U.rand(-0.1, 0.5)), z + Math.sin(a) * r,
-          U.rand(0, 3), U.rand(0, 3), U.rand(0, 3), 1, U.rand(0.7, 0.9), 1), c);
+      const s = size * U.rand(0.85, 1.35) * (i === 0 ? 1.3 : 1) * (tall ? 0.85 : 1);
+      const a = (i / blobs) * Math.PI * 2 + U.rand(-0.3, 0.3);
+      const r = i === 0 ? 0 : size * U.rand(0.55, 0.95) * (tall ? 0.7 : 1);
+      const up = i === 0 ? 0.6 : (tall ? U.rand(-0.2, 1.8) : U.rand(-0.15, 0.55));
+      const c = _c.setHex(base).offsetHSL(U.rand(-0.02, 0.02), U.rand(-0.05, 0.05), (up - 0.4) * 0.05 + U.rand(-0.04, 0.04)).getHex();
+      col.add(lumpy(new THREE.IcosahedronGeometry(s, 0), 0.3),
+        G.xform(top.x + Math.cos(a) * r, top.y + size * up, top.z + Math.sin(a) * r,
+          U.rand(0, 3), U.rand(0, 3), U.rand(0, 3), 1, U.rand(0.7, 0.9), 1), c, K_LEAF);
     }
   }
 
-  /** Çam: ince gövde + üst üste daralan koniler. */
+  /** Çam: ince gövde + üst üste daralan, hafif dönük koniler; alt katlar koyu. */
   function addPine(col, x, y, z, size) {
-    const trunkH = size * 1.2;
-    col.add(new THREE.CylinderGeometry(size * 0.12, size * 0.22, trunkH, 5), G.xform(x, y + trunkH / 2, z), 0x4e3422);
-    const tiers = U.randInt(3, 4);
+    const trunkH = size * U.rand(1.0, 1.5);
+    col.add(new THREE.CylinderGeometry(size * 0.12, size * 0.22, trunkH, 5), G.xform(x, y + trunkH / 2, z), 0x4a3322, K_BARK);
+    const tiers = U.randInt(3, 5);
     const c = U.pick(PINE);
+    const w = U.rand(0.85, 1.15);
     for (let i = 0; i < tiers; i++) {
-      const r = size * (1.5 - i * 0.3), h = size * (1.9 - i * 0.25);
-      col.add(new THREE.ConeGeometry(r, h, 7), G.xform(x, y + trunkH + i * size * 0.95 + h * 0.4, z, 0, U.rand(0, 3), 0),
-        new THREE.Color(c).offsetHSL(0, 0, i * 0.03).getHex());
+      const r = size * (1.5 - i * (1.1 / tiers)) * w, h = size * (1.9 - i * 0.2);
+      col.add(new THREE.ConeGeometry(r, h, 7), G.xform(x, y + trunkH + i * size * (3.4 / tiers) + h * 0.4, z, U.rand(-0.05, 0.05), U.rand(0, 3), U.rand(-0.05, 0.05)),
+        _c.setHex(c).offsetHSL(0, 0, i * 0.025 - 0.02).getHex(), K_LEAF);
     }
   }
 
@@ -257,22 +342,22 @@ EV.World = (function () {
     const s = size * U.rand(0.6, 1.0);
     const n2 = U.randInt(1, 3);
     for (let i = 0; i < n2; i++) {
-      col.add(new THREE.IcosahedronGeometry(s * U.rand(0.6, 1), 0),
+      col.add(lumpy(new THREE.IcosahedronGeometry(s * U.rand(0.6, 1), 0), 0.3),
         G.xform(x + U.rand(-0.5, 0.5) * s, y + s * 0.25, z + U.rand(-0.5, 0.5) * s, U.rand(0, 3), U.rand(0, 3), 0, 1, 0.6, 1),
-        new THREE.Color(color).offsetHSL(0, 0, U.rand(-0.05, 0.05)).getHex());
+        _c.setHex(color).offsetHSL(U.rand(-0.02, 0.02), 0, U.rand(-0.06, 0.05)).getHex(), K_LEAF);
     }
   }
 
   function addAlga(col, x, y, z, size, color) {
-    const seg = U.randInt(4, 7);
+    const n2 = U.randInt(4, 7);
     let cy = y;
     const lean = U.rand(-0.16, 0.16), dir = U.rand(0, Math.PI * 2);
-    for (let i = 0; i < seg; i++) {
+    for (let i = 0; i < n2; i++) {
       const h = size * U.rand(0.7, 1.1);
       const w = Math.max(size * (0.3 - i * 0.025), 0.07);
       col.add(new THREE.BoxGeometry(w, h, w),
         G.xform(x + Math.sin(dir) * lean * i * size, cy + h * 0.5, z + Math.cos(dir) * lean * i * size, 0, dir + i * 0.3, lean * 0.8),
-        color);
+        _c.setHex(color).offsetHSL(0, 0, i * 0.02).getHex(), K_LEAF);
       cy += h * 0.86;
     }
   }
@@ -292,17 +377,30 @@ EV.World = (function () {
     decorMats = null;
   }
 
-  /** Collector ile aynı arayüz; parçayı konumuna göre 60 m'lik bir kovaya koyar. */
+  /**
+   * Collector ile aynı arayüz; parçayı konumuna göre 60 m'lik bir kovaya koyar.
+   * Parça türü (kind) köşe özniteliği olarak eklenir: aynı materyal, aynı çizim çağrısı.
+   */
   function Chunked() { this.map = new Map(); }
-  Chunked.prototype.add = function (geo, m, color) {
+  Chunked.prototype.add = function (geo, m, color, kind) {
     const k = Math.floor(m.elements[12] / CHUNK) * 4096 + Math.floor(m.elements[14] / CHUNK);
     let c = this.map.get(k);
-    if (!c) { c = new G.Collector(); this.map.set(k, c); }
-    c.add(geo, m, color);
+    if (!c) { c = { col: new G.Collector(), runs: [] }; this.map.set(k, c); }
+    const before = c.col.verts;
+    c.col.add(geo, m, color);
+    c.runs.push(c.col.verts - before, kind || 0);
   };
   Chunked.prototype.bakeAll = function () {
     const out = [];
-    this.map.forEach((c) => { const g = c.bake(); if (g) out.push(g); });
+    this.map.forEach((c) => {
+      const verts = c.col.verts;
+      const g = c.col.bake();
+      if (!g) return;
+      const kinds = new Uint8Array(verts);
+      for (let i = 0, o = 0; i < c.runs.length; i += 2) { kinds.fill(c.runs[i + 1], o, o + c.runs[i]); o += c.runs[i]; }
+      g.setAttribute('kind', new THREE.BufferAttribute(kinds, 1));
+      out.push(g);
+    });
     return out;
   };
 
@@ -314,6 +412,34 @@ EV.World = (function () {
       mesh.userData.shadowCast = cast ? 'decor' : null;
       mesh.receiveShadow = true;
       decorGroup.add(mesh);
+    });
+  }
+
+  /**
+   * Havuz suları: merkezden kenara 0→1 'edge' özniteliği taşıyan yelpaze diskler
+   * (kıyı dışında kalan uç kısım gölgelendiricide yumuşakça söner); 60 m parçalarda birleşir.
+   */
+  function buildWater(list, mat) {
+    const SEG = 24;
+    const map = new Map();
+    list.forEach((w) => {
+      const k = Math.floor(w.x / CHUNK) * 4096 + Math.floor(w.z / CHUNK);
+      let b = map.get(k);
+      if (!b) { b = { pos: [], edge: [] }; map.set(k, b); }
+      for (let i = 0; i < SEG; i++) {
+        const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+        b.pos.push(w.x, w.y, w.z,
+          w.x + Math.cos(a1) * w.r, w.y, w.z + Math.sin(a1) * w.r,
+          w.x + Math.cos(a0) * w.r, w.y, w.z + Math.sin(a0) * w.r);
+        b.edge.push(0, 1, 1);
+      }
+    });
+    map.forEach((b) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
+      g.setAttribute('edge', new THREE.Float32BufferAttribute(b.edge, 1));
+      g.computeBoundingSphere();
+      decorGroup.add(new THREE.Mesh(g, mat));
     });
   }
 
@@ -352,14 +478,24 @@ EV.World = (function () {
     }
   }
 
-  function buildLandDecor(stage, solid, glassy, wet) {
+  function buildLandDecor(stage, solid, glassy, water) {
     const pal = stage.palette;
     const isMammal = stage.id === 'mammal';
 
     pools.forEach((p) => {
-      const disc = new THREE.CircleGeometry(p.r, 9);
-      disc.rotateX(-Math.PI / 2);
-      wet.add(disc, G.xform(p.x, p.h + 0.85, p.z), pal.water);
+      // su kenarı GPU'da arazi yüksekliğiyle kesilir (yumuşak kıyı); disk suyun toprağa
+      // değdiği yere kadar uzanır. Su seviyesi havuz çemberinin en alçak noktasını aşmaz.
+      let rim = Infinity;
+      for (let a = 0; a < 16; a++) rim = Math.min(rim, height(p.x + Math.cos(a * 0.3927) * p.r, p.z + Math.sin(a * 0.3927) * p.r));
+      const wy = U.clamp(rim - 0.05, p.h + 0.35, p.h + 0.85);
+      let reach = p.r * 0.6;
+      for (let a = 0; a < 16; a++) {
+        const cx = Math.cos(a * 0.3927), cz = Math.sin(a * 0.3927);
+        let d = p.r * 0.5;
+        while (d < p.r + 4 && height(p.x + cx * d, p.z + cz * d) < wy) d += 0.5;
+        reach = Math.max(reach, d);
+      }
+      water.push({ x: p.x, y: wy, z: p.z, r: reach + 1.5 });
       const ring = U.randInt(3, 6);
       for (let i = 0; i < ring; i++) {
         const a = U.rand(0, Math.PI * 2);
@@ -427,14 +563,14 @@ EV.World = (function () {
           addRock(solid, px, height(px, pz) - 0.3, pz, U.rand(1.6, 2.4), stage.palette);
           obstacles.push({ x: px, z: pz, r: 1.4 });
         }
-        solid.add(new THREE.CylinderGeometry(r * 0.85, r * 0.85, 0.08, 12), G.xform(x, height(x, z) + 0.05, z), 0x6b5a3a);
+        solid.add(new THREE.CylinderGeometry(r * 0.85, r * 0.85, 0.08, 12), G.xform(x, height(x, z) + 0.05, z), 0x6b5a3a, K_ROCK);
       } else {
-        const cols = [0x6f9a3a, 0x5a8a2e, 0x86ad4a];
+        const cols = [0x6f9a3a, 0x5a8a2e, 0x86ad4a, 0x9aa850];
         for (let i = 0; i < 70; i++) {
           const aa = U.rand(0, Math.PI * 2), rr = Math.sqrt(Math.random()) * r;
           const px = x + Math.cos(aa) * rr, pz = z + Math.sin(aa) * rr;
           const h = U.rand(2.6, 3.8);
-          solid.add(new THREE.BoxGeometry(0.14, h, 0.14), G.xform(px, height(px, pz) + h / 2 - 0.2, pz, U.rand(-0.2, 0.2), U.rand(0, 3), U.rand(-0.2, 0.2)), U.pick(cols));
+          solid.add(new THREE.ConeGeometry(0.11, h, 3, 1, true), G.xform(px, height(px, pz) + h / 2 - 0.2, pz, U.rand(-0.25, 0.25), U.rand(0, 3), U.rand(-0.25, 0.25)), U.pick(cols), K_LEAF);
         }
       }
     }
@@ -452,10 +588,10 @@ EV.World = (function () {
   function buildDecor(stage) {
     clearDecor();
     obstacles.length = 0;
-    const solid = new Chunked(), glassy = new Chunked(), wet = new Chunked();
+    const solid = new Chunked(), glassy = new Chunked(), water = [];
 
     if (stage.kind === 'cell') buildCellDecor(stage, solid, glassy);
-    else buildLandDecor(stage, solid, glassy, wet);
+    else buildLandDecor(stage, solid, glassy, water);
     buildCovers(stage, solid);
     // saklanma yerlerinin içindeki engeller kaldırılır: içeri girilebilmeli
     for (let i = obstacles.length - 1; i >= 0; i--) {
@@ -463,15 +599,17 @@ EV.World = (function () {
       if (covers.some((c) => Math.hypot(o.x - c.x, o.z - c.z) < c.r - 0.8)) obstacles.splice(i, 1);
     }
 
+    const GX = EV.GFX;
     decorMats = {
-      solid: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 }),
+      solid: GX ? GX.decorMaterial() : new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 }),
       glassy: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.18, metalness: 0.1,
         transparent: true, opacity: stage.kind === 'cell' ? 0.5 : 0.88, emissive: 0x112233 }),
-      wet: new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 110, specular: 0x9ab8cc, transparent: true, opacity: 0.8 }),
+      wet: GX ? GX.waterMaterial(stage.palette.water)
+        : new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 110, specular: 0x9ab8cc, transparent: true, opacity: 0.8 }),
     };
     addBaked(solid, decorMats.solid, true);
     addBaked(glassy, decorMats.glassy, true);
-    addBaked(wet, decorMats.wet, false);
+    buildWater(water, decorMats.wet);
     rebuildGrid();
   }
 
@@ -594,14 +732,14 @@ EV.World = (function () {
     hover = stage.hover || 0;
     pools = findPools();
     reshapeTerrain();
-    paintTerrain(stage.palette);
-    buildDecor(stage);
+    buildDecor(stage);          // önce dekor: saklanma yerleri zemin karışımına girer
+    paintTerrain(stage);
     applyLight(stage);
   }
 
   return {
     init, applyStage, height, groundY, slopeAt, resolveCollision, clampToPlay, get sun() { return sun; },
     avoid, blocked, randomSpawn, isInPool, nearObstacles, obstacles, covers, inCover, SIZE, PLAY,
-    get hover() { return hover; },
+    get hover() { return hover; }, get pools() { return pools; },
   };
 })();

@@ -157,6 +157,11 @@ window.T = (function () {
     const g = G();
     let modalStreak = 0;
     for (let s = 0; s < steps; s++) {
+      if (EV.EvoCine && EV.EvoCine.active) {          // evrim sinematiği: hızlı ilerlet
+        EV.EvoCine.update(g, dt);
+        EV.Input.endFrame();
+        continue;
+      }
       if (handleModals(o)) {
         if (++modalStreak > 50) { stats.modalLoops++; break; }
         continue;
